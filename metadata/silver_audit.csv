@@ -1,0 +1,6 @@
+dataset,rows_input,rows_clean,rows_quarantined,pct_quarantined,top_failure_reasons,transforms,generated_at
+transactions_history_final.csv,2376389,2339455,36934,1.55,pk_duplicate=32240; value_out_of_range=4694; referential_integrity_fail=0,,2026-05-16T15:16:27+00:00
+outlet_master.csv,20000,20000,0,0.0,null_required_field=196,whitespace_stripped_cells=200; outlet_type_normalised=785; outlet_size_normalised=600,2026-05-16T15:16:27+00:00
+outlet_coordinates.csv,20000,20000,0,0.0,,whitespace_stripped_cells=0,2026-05-16T15:16:27+00:00
+distributor_seasonality_details.csv,360,360,0,0.0,invalid_category=0,whitespace_stripped_cells=0,2026-05-16T15:16:27+00:00
+holiday_list.csv,349,78,271,77.65,pk_duplicate=271,whitespace_stripped_cells=0,2026-05-16T15:16:27+00:00

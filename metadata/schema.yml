@@ -1,0 +1,80 @@
+datasets:
+  transactions_history_final:
+    file: datastorm-7-0-rotaract/transactions_history_final.csv
+    primary_key:
+      - Outlet_ID
+      - Year
+      - Month
+      - Distributor_ID
+      - SKU_ID
+    required_fields:
+      - Outlet_ID
+      - Year
+      - Month
+      - Distributor_ID
+      - SKU_ID
+      - Volume_Liters
+    fields:
+      Outlet_ID: {type: string}
+      Year: {type: int}
+      Month: {type: int}
+      Distributor_ID: {type: string}
+      SKU_ID: {type: string}
+      Volume_Liters: {type: float}
+      Total_Bill_Value: {type: float}
+  outlet_master:
+    file: datastorm-7-0-rotaract/outlet_master.csv
+    primary_key:
+      - Outlet_ID
+    required_fields:
+      - Outlet_ID
+      - Outlet_Size
+      - Cooler_Count
+      - Outlet_Type
+    fields:
+      Outlet_ID: {type: string}
+      Outlet_Size: {type: string}
+      Cooler_Count: {type: int}
+      Outlet_Type: {type: string}
+  outlet_coordinates:
+    file: datastorm-7-0-rotaract/outlet_coordinates.csv
+    primary_key:
+      - Outlet_ID
+    required_fields:
+      - Outlet_ID
+      - Latitude
+      - Longitude
+    fields:
+      Outlet_ID: {type: string}
+      Latitude: {type: float}
+      Longitude: {type: float}
+  distributor_seasonality_details:
+    file: datastorm-7-0-rotaract/distributor_seasonality_details.csv
+    primary_key:
+      - Distributor_ID
+      - Year
+      - Month
+    required_fields:
+      - Distributor_ID
+      - Year
+      - Month
+      - Seasonality_Index
+    fields:
+      Distributor_ID: {type: string}
+      Year: {type: int}
+      Month: {type: int}
+      Seasonality_Index: {type: string}
+  holiday_list:
+    file: datastorm-7-0-rotaract/holiday_list.csv
+    primary_key:
+      - Date
+      - Holiday_Name
+    required_fields:
+      - Date
+      - Holiday_Name
+    fields:
+      Date: {type: datetime}
+      Holiday_Name: {type: string}
+      Holiday_Type: {type: string}
+notes:
+  read_only_source: "Do not edit files in datastorm-7-0-rotaract."

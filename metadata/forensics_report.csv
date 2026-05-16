@@ -1,0 +1,43 @@
+dataset,check,artifact_type,count,note,generated_at
+transactions_history_final.csv,total_rows,info,2376389,,2026-05-16T14:24:30Z
+transactions_history_final.csv,distinct_outlets,info,20000,,2026-05-16T14:24:30Z
+transactions_history_final.csv,distinct_distributors,info,10,,2026-05-16T14:24:30Z
+transactions_history_final.csv,distinct_skus,info,10,,2026-05-16T14:24:30Z
+transactions_history_final.csv,pk_duplicates,duplicate,32240,"Same (Outlet,Year,Month,Dist,SKU) tuple",2026-05-16T14:24:30Z
+transactions_history_final.csv,null_Outlet_ID,null,0,,2026-05-16T14:24:30Z
+transactions_history_final.csv,null_Year,null,0,,2026-05-16T14:24:30Z
+transactions_history_final.csv,null_Month,null,0,,2026-05-16T14:24:30Z
+transactions_history_final.csv,null_Distributor_ID,null,0,,2026-05-16T14:24:30Z
+transactions_history_final.csv,null_SKU_ID,null,0,,2026-05-16T14:24:30Z
+transactions_history_final.csv,null_Volume_Liters,null,0,,2026-05-16T14:24:30Z
+transactions_history_final.csv,negative_Volume_Liters,anomaly,4753,Volume < 0 (censoring artifact?),2026-05-16T14:24:30Z
+transactions_history_final.csv,negative_Total_Bill_Value,anomaly,4753,Bill < 0 (returns/credits?),2026-05-16T14:24:30Z
+transactions_history_final.csv,out_of_range_Year,anomaly,0,Expected 2023–2025,2026-05-16T14:24:30Z
+transactions_history_final.csv,out_of_range_Month,anomaly,0,Expected 1–12,2026-05-16T14:24:30Z
+outlet_master.csv,total_rows,info,20000,,2026-05-16T14:24:30Z
+outlet_master.csv,distinct_outlets,info,20000,,2026-05-16T14:24:30Z
+outlet_master.csv,pk_duplicates,duplicate,0,,2026-05-16T14:24:30Z
+outlet_master.csv,null_Outlet_ID,null,0,,2026-05-16T14:24:30Z
+outlet_master.csv,null_Outlet_Size,null,196,,2026-05-16T14:24:30Z
+outlet_master.csv,null_Cooler_Count,null,0,,2026-05-16T14:24:30Z
+outlet_master.csv,null_Outlet_Type,null,0,,2026-05-16T14:24:30Z
+outlet_coordinates.csv,total_rows,info,20000,,2026-05-16T14:24:30Z
+outlet_coordinates.csv,distinct_outlets,info,20000,,2026-05-16T14:24:30Z
+outlet_coordinates.csv,pk_duplicates,duplicate,0,,2026-05-16T14:24:30Z
+outlet_coordinates.csv,null_Outlet_ID,null,0,,2026-05-16T14:24:30Z
+outlet_coordinates.csv,null_Latitude,null,0,,2026-05-16T14:24:30Z
+outlet_coordinates.csv,null_Longitude,null,0,,2026-05-16T14:24:30Z
+distributor_seasonality_details.csv,total_rows,info,360,,2026-05-16T14:24:30Z
+distributor_seasonality_details.csv,pk_duplicates,duplicate,0,,2026-05-16T14:24:30Z
+distributor_seasonality_details.csv,null_Distributor_ID,null,0,,2026-05-16T14:24:30Z
+distributor_seasonality_details.csv,null_Year,null,0,,2026-05-16T14:24:30Z
+distributor_seasonality_details.csv,null_Month,null,0,,2026-05-16T14:24:30Z
+distributor_seasonality_details.csv,null_Seasonality_Index,null,0,,2026-05-16T14:24:30Z
+holiday_list.csv,total_rows,info,349,,2026-05-16T14:24:30Z
+holiday_list.csv,pk_duplicates,duplicate,271,,2026-05-16T14:24:30Z
+holiday_list.csv,null_Date,null,0,,2026-05-16T14:24:30Z
+holiday_list.csv,null_Holiday_Name,null,0,,2026-05-16T14:24:30Z
+cross_dataset,outlets_in_tx_not_in_master,referential_integrity,0,Outlets with sales but no master record — ghost outlets,2026-05-16T14:24:30Z
+cross_dataset,outlets_in_master_not_in_tx,referential_integrity,0,Outlets in master with no transactions — latent/inactive outlets,2026-05-16T14:24:30Z
+cross_dataset,outlets_in_tx_not_in_coords,referential_integrity,0,Outlets with sales but no coordinates,2026-05-16T14:24:30Z
+cross_dataset,outlets_in_coords_not_in_tx,referential_integrity,0,Outlets with coordinates but no transactions,2026-05-16T14:24:30Z

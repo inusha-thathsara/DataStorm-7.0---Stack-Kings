@@ -1,0 +1,41 @@
+metric,value,note
+generated_at,2026-05-16T14:28:04Z,
+total_rows,2376389,
+exact_duplicate_rows,0,All 7 fields identical
+pk_duplicate_rows,32240,"Same (Outlet,Year,Month,Dist,SKU) different values"
+distinct_outlets,20000,
+distinct_distributors,10,
+distinct_skus,10,
+null_Outlet_ID,0,
+null_Year,0,
+null_Month,0,
+null_Distributor_ID,0,
+null_SKU_ID,0,
+null_Volume_Liters,0,
+null_Total_Bill_Value,0,
+negative_Volume_Liters,4753,Possible censoring artifact or data error
+zero_Volume_Liters,100,Zero-volume transactions
+negative_Total_Bill_Value,4753,"Returns, credits, or data error"
+out_of_range_Year,0,Year outside 2023–2025
+out_of_range_Month,0,Month outside 1–12
+blackout_outlets_missing_dec2025,7413,Outlets whose last record is before Dec 2025
+outlets_dropped_before_2025,5,Outlets with no data in 2025 at all
+year_2023,791707,
+year_2024,791981,
+year_2025,792701,
+month_1,197323,
+month_2,196995,
+month_3,200656,
+month_4,197567,
+month_5,197844,
+month_6,197859,
+month_7,198283,
+month_8,198238,
+month_9,198317,
+month_10,198440,
+month_11,197280,
+month_12,197587,
+overall_volume_min,-956.4407948464004,Minimum across all outlets
+overall_volume_max,9438.577615512924,Maximum across all outlets
+mean_outlet_mean_volume,32.1474,Average of per-outlet means
+mean_outlet_std_volume,41.8416,Average of per-outlet std devs
