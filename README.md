@@ -15,15 +15,14 @@ python src/run_round2_pipeline.py
 python src/run_round2_pipeline.py --full
 
 # 3. Start the Outlet Intelligence Web App
-#    outlets.json (~40 MB) is gitignored — run phase6 if you cloned without running step 2:
-#    python src/phase6_export_app_data.py
+#    Run step 2 first (or: python src/phase6_export_app_data.py) so app data is exported
 cd app && npm install && npm run build:clean && npm run start
 # Open http://localhost:3000
 # Dev mode: npm run dev:clean  (do not mix dev + start on same .next cache)
-# Optional: OLLAMA_ENABLED / GEMINI_API_KEY in app/.env.local for LLM XAI (template fallback always works)
+# Optional: copy app/.env.example → .env.local for Ollama/Gemini XAI (template fallback always works)
 ```
 
-**Web app data:** `app/public/data/outlets.json` holds all outlet predictions for the UI. It is listed in `.gitignore` (~40 MB). Generate it with `python src/phase6_export_app_data.py` (included in `run_round2_pipeline.py`). See [`app/README.md`](app/README.md).
+See [`app/README.md`](app/README.md) for app setup and demo flow.
 
 ### Manual pipeline (same steps as `run_round2_pipeline.py`)
 
@@ -36,62 +35,42 @@ python src/phase4_predict.py          # ensemble + competition adjustment
 python src/phase4_validate.py
 python src/phase4_optimize.py           # LKR 5M Western Province allocation
 python src/phase5_submit.py
-python src/phase6_export_app_data.py    # app/public/data/outlets.json (~40 MB, gitignored) + export_manifest.json
+python src/phase6_export_app_data.py    # export web app data bundles
 python src/validate_xai_samples.py
 python src/audit_all.py                 # target: 0 FAIL
 ```
 
-See [`docs/pipeline_qa.md`](docs/pipeline_qa.md) and run `python src/verify_all.py` before submitting.
-
-**Google Form uploads:** see [`docs/SUBMISSION.md`](docs/SUBMISSION.md) (CSVs, zip/GitHub, two PDFs — no video field).
+Run `python src/verify_all.py` before submitting.
 
 **Final submission files:**
 - `submissions/StackKings_predictions.csv` — latent potential (20,000 outlets)
 - `submissions/StackKings_budget_allocations.csv` — Western Province trade spend
-- `submissions/submission.csv` — alias of predictions file
 
 **Main notebook:** `notebooks/datastorm7_solution.ipynb`
 
-### Round 2 deliverables (Workstream 6)
-
-| Item | Source (export PDF / upload per form) |
-|------|----------------------------------------|
-| Technical paper | [`docs/StackKings_Technical_Paper.md`](docs/StackKings_Technical_Paper.md) → PDF |
-| Mathematical framework | [`docs/Mathematical_Framework.md`](docs/Mathematical_Framework.md) (equations & constants) |
-| Pitch deck | [`docs/pitch_deck.md`](docs/pitch_deck.md) → PDF |
-| Speaker notes | [`docs/pitch_speaker_notes.md`](docs/pitch_speaker_notes.md) |
-| Live demo script | [`docs/demo_script.md`](docs/demo_script.md) (rehearsal if presenting live) |
-| Submission guide | [`docs/SUBMISSION.md`](docs/SUBMISSION.md) |
-| Checklist | [`docs/workstream6_checklist.md`](docs/workstream6_checklist.md) |
+**Documentation:** [`docs/Mathematical_Framework.md`](docs/Mathematical_Framework.md) — equations and constants used in the pipeline.
 
 ---
 
 ## Repository Structure
 
 ```
-Datastorm/
-├── datastorm-7-0-rotaract/     # READ-ONLY source data (never modified)
-│   ├── transactions_history_final.csv
-│   ├── outlet_master.csv
-│   ├── outlet_coordinates.csv
-│   ├── distributor_seasonality_details.csv
-│   ├── holiday_list.csv
-│   └── 1. dataset_description.xlsx
-│
+Round 1/
 ├── bronze/raw/                  # Immutable copies with SHA-256 manifest
 ├── silver/
 │   ├── clean/                   # 5 cleaned datasets
 │   └── quarantine/              # 5 quarantine files (37,205 rejected records)
 ├── gold/
 │   ├── features/
-│   │   ├── poi_normalized.csv   # 44,000 POIs (7 categories)
 │   │   ├── outlet_features.csv  # 20,000 × 40 Gold feature table
 │   │   ├── outlet_stats.csv     # Per-outlet historical statistics
 │   │   └── coord_quality.csv    # Coordinate audit (200 swapped, 40 zeros)
 │   └── predictions/
-│       └── predictions_raw.csv  # Full predictions with traceability columns
+│       ├── predictions_final.csv
+│       └── predictions_raw.csv
 ├── submissions/
-│   └── submission.csv           # FINAL KAGGLE SUBMISSION
+│   ├── StackKings_predictions.csv
+│   └── StackKings_budget_allocations.csv
 ├── notebooks/
 │   └── datastorm7_solution.ipynb
 ├── metadata/
@@ -133,15 +112,9 @@ Datastorm/
 ├── app/                         # Round 2: Outlet Intelligence Web App (Next.js + Tailwind)
 │   ├── app/                     # App Router pages + XAI API
 │   ├── components/              # UI + FilterBar, OutletsTable, OutletMap, …
-│   └── public/data/             # outlets.json + export_manifest.json
+│   └── public/data/             # export_manifest.json, optimization_summary.json, …
 ├── docs/
-│   ├── StackKings_Technical_Paper.md  # WS6: export to PDF (≤10 pages)
-│   ├── pitch_deck.md                  # WS6: export to PDF (≤10 slides)
-│   ├── pitch_speaker_notes.md         # WS6: 10-min pitch script
-│   ├── demo_script.md                 # WS6: 5-min live demo + Q&A
-│   ├── SUBMISSION.md                  # WS6: zip + PDF export guide
-│   ├── workstream6_checklist.md       # WS6: completion checklist
-│   └── pipeline_qa.md                 # Workstream 5 QA checklist
+│   └── Mathematical_Framework.md
 ├── genai_transparency_log.md
 └── README.md
 ```
@@ -191,7 +164,7 @@ outlets from purchasing up to true demand.
 
 **Pipeline:** Bronze → Silver → Gold → Predictions → Optimization → Web App
 
-1. **Exponential distance-decay POI features:** `influence = Σ exp(-β·d)` replaces flat radius counts (β per category in `src/spatial_decay.py`; sensitivity in `docs/StackKings_Technical_Paper.md` §1.5, `python src/summarize_decay_beta.py`)
+1. **Exponential distance-decay POI features:** `influence = Σ exp(-β·d)` replaces flat radius counts (β per category in `src/spatial_decay.py`; run `python src/summarize_decay_beta.py` for sensitivity tables in `metadata/decay_beta_sensitivity.csv`)
 2. **Competitive catchment density:** outlet-to-outlet spatial index, DBSCAN zones, saturation labels
 3. **Ensemble prediction:** `max(K-Means ceiling, QR τ=0.90)` with competition adjustment
 4. **LKR 5M optimization:** diminishing-returns LP for Western Province trade spend
