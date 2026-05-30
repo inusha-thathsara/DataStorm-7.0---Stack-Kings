@@ -124,7 +124,15 @@ if p_gold.exists():
     check("Holiday flags/features", "holiday" in gold_src.lower())
     check("Coordinate repair (swap detection)", "swapped" in gold_src.lower())
     check("KD-Tree spatial indexing used", "cKDTree" in gold_src or "KDTree" in gold_src)
-    check("Multiple radius distances (1km, 3km)", "1.0" in gold_src and "3.0" in gold_src)
+    decay_src = ""
+    p_decay_early = ROOT / "src" / "spatial_decay.py"
+    if p_decay_early.exists():
+        decay_src = p_decay_early.read_text(encoding="utf-8")
+    has_legacy_radii = (
+        ("1.0" in gold_src and "3.0" in gold_src)
+        or ("RADII_KM" in decay_src and "1.0" in decay_src and "3.0" in decay_src)
+    )
+    check("Multiple radius distances (1km, 3km)", has_legacy_radii)
 
 # 7.2 outlet_features.csv
 feat_path = ROOT / "gold" / "features" / "outlet_features.csv"
@@ -188,6 +196,66 @@ if feat_path.exists():
               n_nonzero_worship > 5000,
               f"{n_nonzero_worship:,} outlets have worship POIs within 3km")
 
+# 7.4 Round 2: decay + competition gold features
+print("\n--- Step 7b: Round 2 Gold Spatial (Decay + Competition) ---")
+
+p_decay = ROOT / "src" / "spatial_decay.py"
+p_comp = ROOT / "src" / "spatial_competition.py"
+check("spatial_decay.py module exists", p_decay.exists())
+check("spatial_competition.py module exists", p_comp.exists())
+check("distributor_province_map.csv exists",
+      (ROOT / "metadata" / "distributor_province_map.csv").exists())
+
+if p_gold.exists():
+    gold_src = p_gold.read_text(encoding="utf-8")
+    check("Imports spatial_decay module", "spatial_decay" in gold_src)
+    check("Imports spatial_competition module", "spatial_competition" in gold_src)
+    check("Exponential decay features (decay_*)", "decay_" in gold_src)
+    check("decay_total composite feature", "decay_total" in gold_src)
+    check("Competitor density features", "competitor_density_index" in gold_src)
+    check("DBSCAN zone features", "dbscan_zone_id" in gold_src)
+    check("Province join on features", "province" in gold_src and "distributor_id" in gold_src)
+    check("Province-median imputation for invalid coords", "spatial_imputed" in gold_src)
+
+if feat_path.exists() and feat_rows:
+    cols = set(feat_rows[0].keys())
+    for cat in poi_cats:
+        check(f"Decay feature: decay_{cat}", f"decay_{cat}" in cols)
+    check("decay_total in features", "decay_total" in cols)
+    check("competitors_500m in features", "competitors_500m" in cols)
+    check("competitors_1km in features", "competitors_1km" in cols)
+    check("competitor_density_index in features", "competitor_density_index" in cols)
+    check("dbscan_zone_id in features", "dbscan_zone_id" in cols)
+    check("market_saturation_label in features", "market_saturation_label" in cols)
+    check("province in features", "province" in cols)
+    check("distributor_id in features", "distributor_id" in cols)
+    check("spatial_imputed flag in features", "spatial_imputed" in cols)
+
+    geocoded = [r for r in feat_rows if r.get("coord_status") in ("valid", "swapped_fixed")]
+    n_decay_nz = sum(1 for r in geocoded if float(r.get("decay_transport", 0) or 0) > 0)
+    check("decay_transport non-zero for >=95% geocoded outlets",
+          n_decay_nz >= 0.95 * len(geocoded),
+          f"{n_decay_nz}/{len(geocoded)} ({100*n_decay_nz/len(geocoded):.1f}%)")
+
+    n_imputed = sum(1 for r in feat_rows if int(r.get("spatial_imputed", 0) or 0) == 1)
+    check("Invalid coords imputed via province medians", n_imputed == 40, f"{n_imputed} imputed")
+
+check("metadata/spatial_feature_comparison.csv exists",
+      (ROOT / "metadata" / "spatial_feature_comparison.csv").exists())
+check("metadata/gold_spatial_report.csv exists",
+      (ROOT / "metadata" / "gold_spatial_report.csv").exists())
+
+compare_path = ROOT / "metadata" / "spatial_feature_comparison.csv"
+if compare_path.exists():
+    with compare_path.open(encoding="utf-8") as f:
+        cmp_rows = list(csv.DictReader(f))
+    check("Spatial A/B comparison has all geocoded outlets",
+          len(cmp_rows) >= 19700, f"{len(cmp_rows)} rows")
+    if cmp_rows:
+        check("A/B comparison includes decay_total column", "decay_total" in cmp_rows[0])
+        check("A/B comparison includes legacy_1km columns",
+              "legacy_transport_1km" in cmp_rows[0])
+
 # 7.3 Coordinate quality audit
 coord_q = ROOT / "gold" / "features" / "coord_quality.csv"
 check("gold/features/coord_quality.csv (audit file) exists", coord_q.exists())
@@ -197,18 +265,78 @@ check("gold/features/coord_quality.csv (audit file) exists", coord_q.exists())
 # ─────────────────────────────────────────────────────────────────────────────
 print("\n--- Verification #2: POI QA ---")
 
+
+def poi_qa_outlet_ok(row: dict) -> tuple[bool, str]:
+    """Automated proximity sanity (replaces manual-only WARN when passing)."""
+    try:
+        lat = float(row["lat"])
+        lon = float(row["lon"])
+    except (ValueError, TypeError, KeyError):
+        return False, "missing lat/lon"
+
+    if not (5.8 <= lat <= 10.0 and 79.5 <= lon <= 82.0):
+        return False, "coords outside Sri Lanka bounds"
+
+    nearest_edu = float(row.get("nearest_education_m", 0) or 0)
+    edu_1km = int(float(row.get("count_education_1km", 0) or 0))
+    edu_3km = int(float(row.get("count_education_3km", 0) or 0))
+    worship_3km = int(float(row.get("count_worship_3km", 0) or 0))
+    decay_total = float(row.get("decay_total", 0) or 0)
+
+    if nearest_edu <= 0 or nearest_edu > 10_000:
+        return False, f"nearest_education_m={nearest_edu:.0f} out of range"
+
+    if edu_1km > 0 and nearest_edu > 1_500:
+        return False, f"edu within 1km count={edu_1km} but nearest={nearest_edu:.0f}m"
+
+    if edu_3km > 0 and nearest_edu > 3_500:
+        return False, f"edu within 3km count={edu_3km} but nearest={nearest_edu:.0f}m"
+
+    if worship_3km > 0 and decay_total <= 0:
+        return False, "worship POIs in 3km but decay_total is zero"
+
+    return True, "ok"
+
+
 if feat_path.exists() and poi_path.exists():
-    # Sample: pick 3 valid outlets and check their POI counts make sense
     valid_outlets = [r for r in feat_rows if r.get("coord_status") == "valid"][:5]
+    qa_report_rows = []
+    qa_pass = 0
     for r in valid_outlets:
         oid = r["Outlet_ID"]
-        lat, lon = float(r["lat"]), float(r["lon"])
-        worship_3km = int(float(r.get("count_worship_3km", 0)))
-        edu_3km = int(float(r.get("count_education_3km", 0)))
-        nearest_edu = float(r.get("nearest_education_m", 0))
-        warning(f"Manual QA sample: {oid} lat={lat:.4f} lon={lon:.4f} "
-                f"| worship_3km={worship_3km} edu_3km={edu_3km} "
-                f"nearest_edu={nearest_edu:.0f}m")
+        ok_sample, reason = poi_qa_outlet_ok(r)
+        if ok_sample:
+            qa_pass += 1
+        else:
+            warning(f"POI QA failed: {oid} ({reason})")
+        qa_report_rows.append({
+            "Outlet_ID": oid,
+            "lat": r.get("lat", ""),
+            "lon": r.get("lon", ""),
+            "count_education_1km": r.get("count_education_1km", 0),
+            "count_education_3km": r.get("count_education_3km", 0),
+            "nearest_education_m": r.get("nearest_education_m", 0),
+            "count_worship_3km": r.get("count_worship_3km", 0),
+            "decay_total": r.get("decay_total", 0),
+            "qa_status": "PASS" if ok_sample else "FAIL",
+            "qa_notes": reason,
+        })
+
+    qa_report_path = ROOT / "metadata" / "poi_qa_samples.csv"
+    if qa_report_rows:
+        qa_report_path.parent.mkdir(parents=True, exist_ok=True)
+        with qa_report_path.open("w", encoding="utf-8", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(qa_report_rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(qa_report_rows)
+        check("metadata/poi_qa_samples.csv written", qa_report_path.exists())
+
+    n_samples = len(valid_outlets)
+    check(
+        "POI QA automated proximity sanity (sample outlets)",
+        qa_pass == n_samples and n_samples >= 5,
+        f"{qa_pass}/{n_samples} samples passed",
+    )
 
     check("Province/distributor coverage verified (no missing regions)",
           True, "10 distributors across 4 provinces confirmed from Phase 1")

@@ -1,0 +1,7 @@
+segment,label,n_outlets,total_spend_lkr,total_incremental_liters,avg_spend_per_outlet,liters_per_1000_lkr
+market_saturation,high,6598,3550592.84,693491.24,538.13,195.317
+market_saturation,low,21,16002.37,3983.8,762.02,248.9506
+market_saturation,medium,2381,1433404.79,307080.22,602.02,214.2313
+seasonality_jan2026,Moderate,9000,5000000.0,1004555.25,555.56,200.9111
+gap_quartile,top_quartile_gap,2238,2714980.29,688046.78,1213.13,253.4261
+gap_quartile,bottom_quartile_gap,2238,11474.03,981.15,5.13,85.5107

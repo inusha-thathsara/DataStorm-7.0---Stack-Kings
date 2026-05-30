@@ -40,7 +40,9 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parents[1]
-PRED_PATH    = ROOT / "gold" / "predictions" / "predictions_raw.csv"
+PRED_PATH    = ROOT / "gold" / "predictions" / "predictions_final.csv"
+if not PRED_PATH.exists():
+    PRED_PATH = ROOT / "gold" / "predictions" / "predictions_raw.csv"
 STATS_PATH   = ROOT / "gold" / "features" / "outlet_stats.csv"
 FEAT_PATH    = ROOT / "gold" / "features" / "outlet_features.csv"
 OUT_REPORT   = ROOT / "metadata" / "validation_report.csv"

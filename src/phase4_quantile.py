@@ -34,11 +34,13 @@ Outputs
   metadata/method_comparison_report.csv    K-Means vs QR comparison
 """
 from __future__ import annotations
-import csv, sys, math
+import csv, json, sys, math
 from pathlib import Path
 
 import numpy as np
 from scipy.optimize import minimize
+
+from modeling_features import QR_FEATURE_COLS
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -49,17 +51,12 @@ FEAT_PATH  = ROOT / "gold" / "features" / "outlet_features.csv"
 PRED_PATH  = ROOT / "gold" / "predictions" / "predictions_raw.csv"
 QR_OUT     = ROOT / "gold" / "predictions" / "qr_predictions.csv"
 CMP_OUT    = ROOT / "metadata" / "method_comparison_report.csv"
+QR_MODEL   = ROOT / "metadata" / "qr_model.json"
 
 TAU        = 0.90   # quantile level — targeting the 90th percentile ceiling
 JAN_FLOOR  = 1.0    # minimum prediction
 
-FEATURE_COLS = [
-    "mean_monthly_vol", "p90_monthly_vol", "std_monthly_vol",
-    "recent_3m_avg", "jan_avg_vol",
-    "size_score", "cooler_count",
-    "count_worship_3km", "count_education_3km",
-    "count_transport_3km", "count_market_3km", "count_food_3km",
-]
+FEATURE_COLS = QR_FEATURE_COLS
 
 DIST_SEASON = {"Favorable": 1.15, "Moderate": 1.00, "Un-Favorable": 0.87}
 
@@ -154,6 +151,19 @@ def main():
     print(f"\n[3] Fitting Linear Quantile Regression (tau={TAU}) ...")
     beta, loss_val = fit_quantile_regression(X_train, y_train)
     print(f"  Converged.  Pinball loss on training set: {loss_val:.4f}")
+
+    QR_MODEL.parent.mkdir(parents=True, exist_ok=True)
+    with QR_MODEL.open("w", encoding="utf-8") as fh:
+        json.dump({
+            "tau": TAU,
+            "feature_cols": FEATURE_COLS,
+            "mu": mu.tolist(),
+            "sd": sd.tolist(),
+            "beta": beta.tolist(),
+            "pinball_loss_train": round(loss_val, 6),
+            "note": "beta[0]=intercept; beta[i+1] applies to z-scored feature i",
+        }, fh, indent=2)
+    print(f"  QR model coefficients (XAI) -> {QR_MODEL}")
 
     # Test-set coverage: how often does QR ceiling >= actual max?
     y_test_pred = X_test @ beta

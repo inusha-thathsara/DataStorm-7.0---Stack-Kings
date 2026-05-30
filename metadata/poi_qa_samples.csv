@@ -1,0 +1,6 @@
+Outlet_ID,lat,lon,count_education_1km,count_education_3km,nearest_education_m,count_worship_3km,decay_total,qa_status,qa_notes
+OUT_00001,7.089846,79.979055,1,13,371.3,17,2.5705,PASS,ok
+OUT_00002,7.000558,80.012422,1,10,948.7,31,4.7476,PASS,ok
+OUT_00003,6.80617,79.854547,2,10,549.3,29,5.4349,PASS,ok
+OUT_00004,6.703533,79.806919,0,9,1119.2,19,3.5604,PASS,ok
+OUT_00005,7.186878,79.869831,0,15,1168.1,21,5.0253,PASS,ok

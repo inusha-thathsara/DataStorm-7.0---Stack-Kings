@@ -5,11 +5,11 @@ Total outlets: 20,000
 --- Sanity Checks ---
 Negative predictions      : 0  (PASS if 0)
 Below own historical max  : 0  (PASS if 0)
-Extreme uplift (>5x)      : 41
+Extreme uplift (>5x)      : 307
 
 --- Uplift Factor ---
-Median uplift factor      : 1.121x
-90th pct uplift           : 2.087x
+Median uplift factor      : 1.259x
+90th pct uplift           : 2.444x
 
 --- Backtest Coverage ---
 Outlets with Dec 2025 data: 12,583
@@ -17,18 +17,18 @@ Coverage rate             : 100.0%  (pred >= historical max)
 Under-predicted outlets   : 0
 
 --- Prediction Distribution (litres) ---
-Min    : 69.8
-P25    : 144.6
-Median : 285.1
-Mean   : 463.7
-P75    : 497.1
-P90    : 1,073.0
-Max    : 11,480.8
+Min    : 65.9
+P25    : 160.0
+Median : 320.0
+Mean   : 493.5
+P75    : 547.3
+P90    : 1,098.5
+Max    : 12,296.7
 
 --- Blackout Outlets ---
 Blackout count            : 7,417
-Blackout median pred      : 177.3 L
+Blackout median pred      : 217.2 L
 
 --- Validation Result ---
-Outlets flagged           : 7433
+Outlets flagged           : 7553
 Overall QA status         : PASS

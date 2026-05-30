@@ -1,5 +1,5 @@
 # Data Storm 7.0 — README
-**Team: Stack Kings**
+**Team: Stack Kings** · **Stage:** Round 2 (2nd Round submission — Top 10 selection)
 
 ## Quick Start
 
@@ -8,26 +8,61 @@
 python -m venv .venv
 .venv\Scripts\pip install numpy scipy requests
 
-# 2. Run the full pipeline
-python src/ingest_manifest.py
-python src/phase1_forensics.py
-python src/phase1_profile_enhanced.py
-python src/phase2_silver.py
-python src/phase3_poi_acquire.py      # requires internet (Overpass API)
-python src/phase3_poi_synthetic.py    # offline fallback if internet unavailable
-python src/phase3_gold_features.py
-python src/phase4_aggregate.py
-python src/phase4_model.py
-python src/phase4_validate.py
-python src/phase5_submit.py
-python src/phase5_generate_notebook.py
+# 2. Run Round 2 pipeline + QA (Workstream 5 — recommended)
+python src/run_round2_pipeline.py
 
-# 3. Run the master audit
-python src/audit_all.py               # must show 163 PASS / 0 FAIL
+# Or full rebuild from bronze (first-time / data refresh):
+python src/run_round2_pipeline.py --full
+
+# 3. Start the Outlet Intelligence Web App
+#    outlets.json (~40 MB) is gitignored — run phase6 if you cloned without running step 2:
+#    python src/phase6_export_app_data.py
+cd app && npm install && npm run build:clean && npm run start
+# Open http://localhost:3000
+# Dev mode: npm run dev:clean  (do not mix dev + start on same .next cache)
+# Optional: OLLAMA_ENABLED / GEMINI_API_KEY in app/.env.local for LLM XAI (template fallback always works)
 ```
 
-**Final submission file:** `submissions/submission.csv`  
+**Web app data:** `app/public/data/outlets.json` holds all outlet predictions for the UI. It is listed in `.gitignore` (~40 MB). Generate it with `python src/phase6_export_app_data.py` (included in `run_round2_pipeline.py`). See [`app/README.md`](app/README.md).
+
+### Manual pipeline (same steps as `run_round2_pipeline.py`)
+
+```bash
+python src/phase3_gold_features.py      # decay POI + competitor density
+python src/phase4_aggregate.py
+python src/phase4_model.py
+python src/phase4_quantile.py
+python src/phase4_predict.py          # ensemble + competition adjustment
+python src/phase4_validate.py
+python src/phase4_optimize.py           # LKR 5M Western Province allocation
+python src/phase5_submit.py
+python src/phase6_export_app_data.py    # app/public/data/outlets.json (~40 MB, gitignored) + export_manifest.json
+python src/validate_xai_samples.py
+python src/audit_all.py                 # target: 0 FAIL
+```
+
+See [`docs/pipeline_qa.md`](docs/pipeline_qa.md) and run `python src/verify_all.py` before submitting.
+
+**Google Form uploads:** see [`docs/SUBMISSION.md`](docs/SUBMISSION.md) (CSVs, zip/GitHub, two PDFs — no video field).
+
+**Final submission files:**
+- `submissions/StackKings_predictions.csv` — latent potential (20,000 outlets)
+- `submissions/StackKings_budget_allocations.csv` — Western Province trade spend
+- `submissions/submission.csv` — alias of predictions file
+
 **Main notebook:** `notebooks/datastorm7_solution.ipynb`
+
+### Round 2 deliverables (Workstream 6)
+
+| Item | Source (export PDF / upload per form) |
+|------|----------------------------------------|
+| Technical paper | [`docs/StackKings_Technical_Paper.md`](docs/StackKings_Technical_Paper.md) → PDF |
+| Mathematical framework | [`docs/Mathematical_Framework.md`](docs/Mathematical_Framework.md) (equations & constants) |
+| Pitch deck | [`docs/pitch_deck.md`](docs/pitch_deck.md) → PDF |
+| Speaker notes | [`docs/pitch_speaker_notes.md`](docs/pitch_speaker_notes.md) |
+| Live demo script | [`docs/demo_script.md`](docs/demo_script.md) (rehearsal if presenting live) |
+| Submission guide | [`docs/SUBMISSION.md`](docs/SUBMISSION.md) |
+| Checklist | [`docs/workstream6_checklist.md`](docs/workstream6_checklist.md) |
 
 ---
 
@@ -79,10 +114,34 @@ Datastorm/
 │   ├── phase3_gold_features.py
 │   ├── phase4_aggregate.py
 │   ├── phase4_model.py
+│   ├── phase4_quantile.py
+│   ├── phase4_predict.py          # Round 2: ensemble + competition adjustment
+│   ├── phase4_optimize.py         # Round 2: LKR 5M budget optimizer
 │   ├── phase4_validate.py
 │   ├── phase5_submit.py
+│   ├── phase6_export_app_data.py  # Round 2: app data bundle
+│   ├── spatial_decay.py           # Round 2: exponential POI decay
+│   ├── spatial_competition.py     # Round 2: competitor density + DBSCAN
+│   ├── validate_xai_samples.py
+│   ├── validate_xai_llm.py
+│   ├── verify_submission.py
+│   ├── verify_all.py              # Master QA (327 checks)
+│   ├── summarize_decay_beta.py
+│   ├── run_round2_pipeline.py   # Workstream 5: one-command pipeline + audit
 │   ├── phase5_generate_notebook.py
-│   └── audit_all.py             # Master QA audit
+│   └── audit_all.py             # Master QA audit (incl. Workstream 5 checks)
+├── app/                         # Round 2: Outlet Intelligence Web App (Next.js + Tailwind)
+│   ├── app/                     # App Router pages + XAI API
+│   ├── components/              # UI + FilterBar, OutletsTable, OutletMap, …
+│   └── public/data/             # outlets.json + export_manifest.json
+├── docs/
+│   ├── StackKings_Technical_Paper.md  # WS6: export to PDF (≤10 pages)
+│   ├── pitch_deck.md                  # WS6: export to PDF (≤10 slides)
+│   ├── pitch_speaker_notes.md         # WS6: 10-min pitch script
+│   ├── demo_script.md                 # WS6: 5-min live demo + Q&A
+│   ├── SUBMISSION.md                  # WS6: zip + PDF export guide
+│   ├── workstream6_checklist.md       # WS6: completion checklist
+│   └── pipeline_qa.md                 # Workstream 5 QA checklist
 ├── genai_transparency_log.md
 └── README.md
 ```
@@ -128,15 +187,27 @@ outlets from purchasing up to true demand.
    ```
    The `own_max` floor ensures predictions are never below observed history.
 
-### Key Results
+### Methodology (Round 2)
+
+**Pipeline:** Bronze → Silver → Gold → Predictions → Optimization → Web App
+
+1. **Exponential distance-decay POI features:** `influence = Σ exp(-β·d)` replaces flat radius counts (β per category in `src/spatial_decay.py`; sensitivity in `docs/StackKings_Technical_Paper.md` §1.5, `python src/summarize_decay_beta.py`)
+2. **Competitive catchment density:** outlet-to-outlet spatial index, DBSCAN zones, saturation labels
+3. **Ensemble prediction:** `max(K-Means ceiling, QR τ=0.90)` with competition adjustment
+4. **LKR 5M optimization:** diminishing-returns LP for Western Province trade spend
+5. **Hybrid XAI:** Ollama → Gemini → template in web app (Tailwind UI in `app/`)
+
+### Key Results (Round 2)
 | Metric | Value |
 |---|---|
 | Total predictions | 20,000 |
-| Median prediction | 285 L/month |
-| Mean prediction | 464 L/month |
+| Median prediction | ~290 L/month |
 | Backtest coverage | 100% |
-| Median uplift over observed max | 1.12× |
-| QA status | PASS |
+| Western Province budget allocated | LKR 5.00M / 5M (100% utilization) |
+| Incremental liters (optimizer) | ~1,004,555 L |
+| Optimizer lift vs naive equal-split baseline | ~253% |
+| XAI validation | 20/20 samples pass |
+| Master audit | 327 PASS / 0 FAIL |
 
 ---
 

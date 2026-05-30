@@ -1,0 +1,21 @@
+{
+  "solver_method": "piecewise_lp_linprog_highs",
+  "total_spend_lkr": "5,000,000.00",
+  "budget_limit_lkr": "5,000,000.00",
+  "budget_slack_lkr": "0.00",
+  "budget_utilization_pct": "100.00",
+  "total_incremental_liters": "1,004,555.25",
+  "roi_liters_per_1000_lkr": "200.9111",
+  "outlets_with_spend": "6395",
+  "naive_top_n": "500",
+  "naive_ranking": "top_by_predicted_potential",
+  "min_spend_floor_target_lkr": "2,000.00",
+  "min_spend_floor_outlets": "100",
+  "min_spend_floor_committed_lkr": "191,969.11",
+  "naive_equal_spend_lkr": "10,000.00",
+  "naive_baseline_liters": "284,520.87",
+  "optimizer_lift_pct": "253.07",
+  "spend_DIST_W_01": "1,666,904.34",
+  "spend_DIST_W_02": "1,655,037.85",
+  "spend_DIST_W_03": "1,678,057.81"
+}

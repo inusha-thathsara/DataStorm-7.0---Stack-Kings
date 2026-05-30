@@ -1,0 +1,18 @@
+# Next.js / Node (also listed in repo root .gitignore)
+node_modules/
+.next/
+out/
+.turbo/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript build info (regenerated)
+*.tsbuildinfo
+
+# Local secrets — use .env.example as template
+.env
+.env*.local
+!.env.example

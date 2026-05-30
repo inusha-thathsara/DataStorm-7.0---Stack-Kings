@@ -59,6 +59,8 @@ from pathlib import Path
 import numpy as np
 from scipy.cluster.vq import kmeans2, whiten
 
+from modeling_features import CLUSTER_FEATURE_COLS
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -99,18 +101,6 @@ def percentile(data: list[float], pct: float) -> float:
 
 
 # ── Feature matrix assembly ───────────────────────────────────────────────────
-
-CLUSTER_FEATURE_COLS = [
-    # Volume profile (from outlet_stats)
-    "mean_monthly_vol", "p90_monthly_vol", "std_monthly_vol",
-    "recent_3m_avg", "jan_avg_vol",
-    # Outlet attributes (from outlet_features)
-    "size_score", "cooler_count",
-    # POI density (from outlet_features)
-    "count_worship_3km", "count_education_3km", "count_transport_3km",
-    "count_market_3km", "count_food_3km",
-]
-
 
 def build_feature_matrix(
     outlet_ids: list[str],

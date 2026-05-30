@@ -43,6 +43,8 @@ All Python scripts were **AI-generated** based on human requirements:
 | `phase5_generate_notebook.py` | Jupyter notebook generator |
 | `audit_*.py` | Automated QA audit scripts |
 
+**Round 2 scripts:** `spatial_decay.py`, `spatial_competition.py`, `phase4_predict.py`, `phase4_optimize.py`, `phase6_export_app_data.py`, `validate_xai_samples.py`, Next.js app in `app/`.
+
 ### 3. Data Forensics Interpretation
 - Identified that 7,413 blackout outlets (no Dec 2025 data) represent a supply constraint signal, not true zero demand
 - Flagged 200 swapped lat/lon coordinates in outlet_coordinates.csv
@@ -82,6 +84,74 @@ The human user issued **natural language task directives** (e.g., "proceed to ph
 
 ---
 
+## XAI Module (Round 2 — In-App Explainability)
+
+**Important:** Generative AI does **not** compute `Maximum_Monthly_Liters` or trade spend. The pipeline writes all numbers; the LLM (or template) only narrates the exported `Outlet` JSON.
+
+### Exact prompts (`app/lib/xai.ts`)
+
+**Ollama system message:**
+```
+You are a FMCG analytics assistant. Explain predictions using only provided data.
+Write exactly 3 short paragraphs in plain business language.
+```
+
+**User message (Ollama + Gemini — function `buildXaiPrompt`):**
+```
+Explain this FMCG outlet prediction in 3 short business paragraphs.
+Use ONLY the facts in the JSON below. Do not invent numbers, metrics, or outlet attributes.
+
+<pretty-printed JSON of Outlet object>
+```
+
+The JSON includes: `predictedLiters`, `ownMaxVol`, `gapLiters`, `recent3mAvg`, `province`, `distributorId`, `competitorDensity`, `competitorDensityZ`, `marketSaturation`, `dbscanZone`, `dbscanIsCore`, `clusterId`, `clusterCeiling`, `kmeansCeiling`, `qrCeiling`, `baseEnsemble`, `adjustedCeiling`, `janFactor`, `seasonalityLabel`, `coolerCount`, `outletSize`, `outletType`, `lat`, `lon`, `decayTransport`, `decayFood`, `decayWorship`, `decayTotal`, `tradeSpendLkr`, `predictedIncrementalLiters`, `dominantMethod`, `adjustmentFactor`.
+
+**Ollama request settings:** `think: false`, `temperature: 0.2`, `num_predict: 512`, default model `gemma4:e4b`, timeout 25s.
+
+**Gemini request settings:** `gemini-2.0-flash` (override via `GEMINI_MODEL`), `temperature: 0.2`, `maxOutputTokens: 300`.
+
+### Hybrid resolution order (`POST /api/explain`)
+
+| Priority | Path | Condition |
+|----------|------|-----------|
+| 1 | Ollama (local) | `OLLAMA_ENABLED=true` or `OLLAMA_BASE_URL` set; Ollama 0.20+ with model pulled |
+| 2 | Gemini (cloud) | Ollama fails or disabled; valid `GEMINI_API_KEY` |
+| 3 | Template | Always — `buildTemplateExplanation()` rule-based drivers |
+
+**Template logic (deterministic drivers):** uplift % vs own max; drivers up (gap, decay transport/food, coolers, seasonality); drivers down (saturation, competition penalty, no cooler); Western spend + incremental liters when present.
+
+### Feature importance / weights (PDF §4.1)
+
+Per-outlet **`modelDrivers`** exported in `outlets.json` (built by `src/xai_feature_drivers.py`):
+
+| Component | Content |
+|-----------|---------|
+| `qrTopDrivers` | Top 5 QR features with **weight** (β on z-scored inputs) and **contributionLiters** (β×z) |
+| `qrInterceptLiters` | Global QR intercept from `metadata/qr_model.json` |
+| `kmeansPeerSignal` | Cluster peer ceiling narrative |
+| `competition` | `saturationPenalty`, `isolationBoost`, `combinedAdjustmentFactor` (γ=0.20, δ=0.10) |
+
+Coefficients saved when running `phase4_quantile.py` → `metadata/qr_model.json`.
+
+### Validation approach
+
+| Layer | Script / artifact | Result |
+|-------|-------------------|--------|
+| Automated CI | `python src/validate_xai_samples.py` | **20/20** template — numbers + QR weights + competition terms |
+| Live LLM (optional) | `python src/validate_xai_llm.py` | Spot-checks Ollama/Gemini; **skips** if unreachable (use `--strict` to fail) |
+| Export contract | `app/public/data/export_manifest.json` | Schema v2 includes `modelDrivers` |
+| Master audit | `audit_all.py` | QR model file, driver fields, XAI routes |
+
+### Human review steps (completed)
+
+1. Confirmed template paragraphs never invent metrics absent from JSON.
+2. Spot-checked Western outlets with high `tradeSpendLkr` — narrative matched optimizer output.
+3. Verified `resolveHybridExplanation` order: Ollama before Gemini in source.
+4. Documented `think: false` for Gemma 4 on Ollama (empty content bug without it).
+5. Approved template-only demo path for judges without API keys.
+
+---
+
 ## Known Limitations & Caveats
 
 1. **Synthetic POI data:** The Overpass API was unreachable from the build environment (406 errors on all endpoints). A geographically realistic synthetic dataset was generated using Sri Lanka population centres and published OSM node counts. The production code (`phase3_poi_acquire.py`) correctly targets Overpass; re-running it with internet access would replace the synthetic data automatically.
@@ -96,20 +166,20 @@ The human user issued **natural language task directives** (e.g., "proceed to ph
 
 ## Reproducibility
 
-All scripts can be re-run in sequence:
+**One command (Round 2 modeling → submissions → app → QA):**
 ```
-python src/ingest_manifest.py
-python src/phase1_forensics.py
-python src/phase1_profile_enhanced.py
-python src/phase2_silver.py
-python src/phase3_poi_acquire.py   # requires internet; falls back to synthetic
-python src/phase3_poi_synthetic.py # offline fallback
-python src/phase3_gold_features.py
-python src/phase4_aggregate.py
-python src/phase4_model.py
-python src/phase4_validate.py
-python src/phase5_submit.py
-python src/phase5_generate_notebook.py
+python src/run_round2_pipeline.py
 ```
 
-All outputs are deterministic given the same input data (K-Means uses `seed=42`).
+Full bronze→gold rebuild:
+```
+python src/run_round2_pipeline.py --full
+```
+
+Web app (Tailwind UI): `cd app && npm install && npm run build:clean && npm run start`
+
+Pre-submit: `python src/verify_all.py`
+
+Judge-facing docs: `docs/StackKings_Technical_Paper.md`, `docs/pitch_deck.md`, `docs/SUBMISSION.md`.
+
+All modeling outputs are deterministic given the same input data (K-Means `seed=42`). LLM XAI text is non-deterministic when Ollama/Gemini are enabled.
