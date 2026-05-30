@@ -1,48 +1,177 @@
 # Data Storm 7.0 — README
 **Team: Stack Kings** · **Stage:** Round 2 (2nd Round submission — Top 10 selection)
 
-## Quick Start
+This document explains how to reproduce our solution **end to end**: data pipeline → submission CSVs → web app export → QA.
+
+---
+
+## Run the pipeline end to end
+
+### Prerequisites
+
+| Requirement | Notes |
+|-------------|--------|
+| **Python 3.11+** | Pipeline scripts in `src/` |
+| **numpy, scipy, requests** | `pip install numpy scipy requests` (or use a venv below) |
+| **Node.js 18+** | Web app only — see [Run the web app](#run-the-web-app) |
+| **Competition CSVs** | Required only for a **full rebuild** (`--full`); see below |
+
+From the **repository root** (where this `README.md` lives):
 
 ```bash
-# 1. Create virtual environment and install dependencies
 python -m venv .venv
+# Windows:
+.venv\Scripts\activate
 .venv\Scripts\pip install numpy scipy requests
-
-# 2. Run Round 2 pipeline + QA (Workstream 5 — recommended)
-python src/run_round2_pipeline.py
-
-# Or full rebuild from bronze (first-time / data refresh):
-python src/run_round2_pipeline.py --full
-
-# 3. Start the Outlet Intelligence Web App
-#    Run step 2 first (or: python src/phase6_export_app_data.py) so app data is exported
-cd app && npm install && npm run build:clean && npm run start
-# Open http://localhost:3000
-# Dev mode: npm run dev:clean  (do not mix dev + start on same .next cache)
-# Optional: copy app/.env.example → .env.local for Ollama/Gemini XAI (template fallback always works)
+# macOS/Linux:
+# source .venv/bin/activate && pip install numpy scipy requests
 ```
 
-See [`app/README.md`](app/README.md) for app setup and demo flow.
+### Option A — Standard run (recommended after clone)
 
-### Manual pipeline (same steps as `run_round2_pipeline.py`)
+The repo includes cleaned **silver/gold** outputs. Re-run modeling, optimization, submissions, app export, and QA **without** re-ingesting raw competition files:
 
 ```bash
-python src/phase3_gold_features.py      # decay POI + competitor density
+python src/run_round2_pipeline.py
+```
+
+**Expected result:** `327 PASS / 0 FAIL` from `audit_all.py` (last step).
+
+**Outputs written:**
+
+| Output | Path |
+|--------|------|
+| Latent potential (20,000 outlets) | `submissions/StackKings_predictions.csv` |
+| Western Province trade spend | `submissions/StackKings_budget_allocations.csv` |
+| Full prediction trace | `gold/predictions/predictions_final.csv` |
+| Web app outlet bundle (~40 MB, local only) | `app/public/data/outlets.json` |
+
+### Option B — Full rebuild from raw competition data
+
+Use when you have the organizer dataset and want to rebuild bronze → silver → gold from scratch.
+
+1. Place the five competition CSVs in `datastorm-7-0-rotaract/` (read-only; never edit in place):
+   - `transactions_history_final.csv`
+   - `outlet_master.csv`
+   - `outlet_coordinates.csv`
+   - `distributor_seasonality_details.csv`
+   - `holiday_list.csv`
+
+2. Run:
+
+```bash
+python src/run_round2_pipeline.py --full
+```
+
+This runs bronze ingest, forensics, silver cleaning, POI acquire (Overpass) + synthetic fallback, gold features, then all Round 2 modeling steps and QA.
+
+> **Note:** Large transaction and POI files are not committed to GitHub. A full rebuild generates them locally (see [Generated files](#generated-files-not-in-this-repo)).
+
+### What `run_round2_pipeline.py` runs
+
+**Default** (`python src/run_round2_pipeline.py`):
+
+| Step | Script | Purpose |
+|------|--------|---------|
+| 1 | `phase3_gold_features.py` | Exponential POI decay + competitor density features |
+| 2 | `phase4_aggregate.py` | Per-outlet historical statistics |
+| 3 | `phase4_model.py` | K-Means lookalike ceilings (K=50) |
+| 4 | `phase4_quantile.py` | Quantile regression ceiling (τ=0.90) |
+| 5 | `phase4_predict.py` | Ensemble + competition adjustment → `predictions_final.csv` |
+| 6 | `phase4_validate.py` | Backtest and sanity checks |
+| 7 | `phase4_optimize.py` | LKR 5M Western Province budget LP |
+| 8 | `phase5_submit.py` | Write submission CSVs |
+| 9 | `phase6_export_app_data.py` | Export JSON for web app (incl. `outlets.json`) |
+| 10 | `validate_xai_samples.py` | XAI template factuality (20/20) |
+| 11 | `validate_xai_llm.py` | Optional live Ollama/Gemini spot-check |
+| 12 | `audit_all.py` | Master QA (**327 checks**, target 0 FAIL) |
+
+**With `--full`:** prepends bronze ingest, phase 1 forensics/profile, silver clean, POI acquire, POI synthetic, then the table above.
+
+**Flags:**
+
+```bash
+python src/run_round2_pipeline.py --skip-audit   # pipeline only, no audit_all
+python src/verify_all.py                         # re-run Python QA without full pipeline
+```
+
+### Manual pipeline (same steps, one script at a time)
+
+If you prefer to run phases individually (equivalent to Option A + QA):
+
+```bash
+python src/phase3_gold_features.py
 python src/phase4_aggregate.py
 python src/phase4_model.py
 python src/phase4_quantile.py
-python src/phase4_predict.py          # ensemble + competition adjustment
+python src/phase4_predict.py
 python src/phase4_validate.py
-python src/phase4_optimize.py           # LKR 5M Western Province allocation
+python src/phase4_optimize.py
 python src/phase5_submit.py
-python src/phase6_export_app_data.py    # export web app data bundles
+python src/phase6_export_app_data.py
 python src/validate_xai_samples.py
-python src/audit_all.py                 # target: 0 FAIL
+python src/audit_all.py
 ```
 
-Run `python src/verify_all.py` before submitting.
+For a **full** manual rebuild, run these first:
 
-**Final submission files:**
+```bash
+python src/ingest_manifest.py
+python src/phase1_forensics.py
+python src/phase1_profile_enhanced.py
+python src/phase2_silver.py
+python src/phase3_poi_acquire.py      # internet; or skip if using cached/synthetic POI
+python src/phase3_poi_synthetic.py
+python src/phase3_gold_features.py
+# … then continue with phase4_aggregate.py onward (list above)
+```
+
+---
+
+## Run the web app
+
+The pipeline must finish **before** starting the app (step 9 above creates the local outlet export).
+
+```bash
+cd app
+npm install
+npm run build:clean
+npm run start
+```
+
+Open **http://localhost:3000**
+
+- **Browse** all 20,000 outlet predictions (paginated table + map)
+- **Filter** by province and/or distributor
+- **Drill down** into an outlet for ceilings, feature drivers, and “Explain this outlet” (Ollama → Gemini → template)
+
+See [`app/README.md`](app/README.md) for XAI configuration and troubleshooting.
+
+**Development:** `npm run dev:clean` — do not mix `dev` and `start` on the same `.next` cache.
+
+---
+
+## Generated files (not in this repo)
+
+Some outputs are **required to run the project locally** but are **not committed to GitHub** — they are too large, contain competition source data, or are local-only working copies. After cloning, generate them with the pipeline scripts below.
+
+| File | Size (approx.) | Required for | How to generate |
+|------|----------------|--------------|-----------------|
+| `app/public/data/outlets.json` | ~40 MB | **Web app** — browse/filter/drill-down all 20,000 outlets | `python src/phase6_export_app_data.py` (included in `run_round2_pipeline.py`) |
+| Competition source bundle | varies | Full rebuild from raw data (`--full` pipeline) | Place organizer CSVs in `datastorm-7-0-rotaract/` per competition instructions, then `python src/run_round2_pipeline.py --full` |
+| `gold/features/poi_normalized.csv` | large | POI feature rebuild | `python src/phase3_gold_features.py` (after POI acquire/synthetic) |
+| Large transaction CSVs under `bronze/` / `silver/` | large | Full transaction re-ingest | `python src/run_round2_pipeline.py --full` |
+
+**Web app (`outlets.json`):** The UI fetches `/data/outlets.json` at startup. Without it, the home page shows an error. Smaller bundles in `app/public/data/` (`export_manifest.json`, `western_budget.json`, `optimization_summary.json`) *are* in the repo, but the full outlet export is not — regenerate after clone or whenever predictions change:
+
+```bash
+# From project root (after phase4_predict + phase4_optimize have run):
+python src/phase6_export_app_data.py
+```
+
+Then start the app ([Run the web app](#run-the-web-app)). A fresh clone should run [Option A](#option-a--standard-run-recommended-after-clone) once; that runs phase6 automatically.
+
+**Final submission files (upload to Google Form):**
 - `submissions/StackKings_predictions.csv` — latent potential (20,000 outlets)
 - `submissions/StackKings_budget_allocations.csv` — Western Province trade spend
 
@@ -52,10 +181,10 @@ Run `python src/verify_all.py` before submitting.
 
 ---
 
-## Repository Structure
+## Repository structure
 
 ```
-Round 1/
+.
 ├── bronze/raw/                  # Immutable copies with SHA-256 manifest
 ├── silver/
 │   ├── clean/                   # 5 cleaned datasets
@@ -112,7 +241,7 @@ Round 1/
 ├── app/                         # Round 2: Outlet Intelligence Web App (Next.js + Tailwind)
 │   ├── app/                     # App Router pages + XAI API
 │   ├── components/              # UI + FilterBar, OutletsTable, OutletMap, …
-│   └── public/data/             # export_manifest.json, optimization_summary.json, …
+│   └── public/data/             # JSON bundles (see “Generated files” — outlets export is local-only)
 ├── docs/
 │   └── Mathematical_Framework.md
 ├── genai_transparency_log.md
@@ -186,14 +315,18 @@ outlets from purchasing up to true demand.
 
 ## Dependencies
 
+**Python pipeline**
+
 ```
 Python 3.11+
 numpy >= 2.0
 scipy >= 1.17
-requests >= 2.28   (for Overpass API; not needed if using synthetic fallback)
+requests >= 2.28   (Overpass POI acquire; optional if using synthetic/cached POI)
 ```
 
-No other third-party packages required. All DE checks and modeling use stdlib + numpy + scipy.
+**Web app** (`app/`): Node.js 18+, npm. See `app/package.json`.
+
+No other Python packages required. DE checks and modeling use stdlib + numpy + scipy.
 
 ---
 

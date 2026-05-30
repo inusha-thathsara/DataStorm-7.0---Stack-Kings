@@ -1,14 +1,18 @@
 # Stack Kings — Outlet Intelligence Web App
 
+Run the [pipeline end to end](../README.md#run-the-pipeline-end-to-end) first (`python src/run_round2_pipeline.py` from the repo root).
+
 ## Setup (judges / demo)
 
-From the project root, export app data if you have not run the full pipeline yet:
+The web app needs a **local export** of all 20,000 outlets at `app/public/data/outlets.json` (~40 MB). That file is **not on GitHub** (size limit); you must generate it after clone.
+
+From the project root:
 
 ```bash
 python src/phase6_export_app_data.py
 ```
 
-(`run_round2_pipeline.py` runs this step automatically.)
+This reads `gold/predictions/predictions_final.csv` and related pipeline outputs. It is the last step in `run_round2_pipeline.py` — if you already ran the full pipeline, the file should exist locally.
 
 ```bash
 cd app
