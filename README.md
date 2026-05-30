@@ -2,12 +2,10 @@
 
 ## Setup (judges / demo)
 
-The app loads **`app/public/data/outlets.json`** (~40 MB, all 20,000 outlets). That file is **gitignored** (too large for GitHub) but **required** — the browse page will error without it.
-
-After cloning the repo, or whenever predictions change, generate it from the Round 1 root:
+From the project root, export app data if you have not run the full pipeline yet:
 
 ```bash
-python src/phase6_export_app_data.py   # writes outlets.json + export_manifest.json (+ smaller JSON bundles)
+python src/phase6_export_app_data.py
 ```
 
 (`run_round2_pipeline.py` runs this step automatically.)
