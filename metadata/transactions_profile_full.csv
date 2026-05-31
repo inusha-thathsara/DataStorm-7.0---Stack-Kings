@@ -1,5 +1,5 @@
 metric,value,note
-generated_at,2026-05-16T14:28:04Z,
+generated_at,2026-05-31T17:09:36Z,
 total_rows,2376389,
 exact_duplicate_rows,0,All 7 fields identical
 pk_duplicate_rows,32240,"Same (Outlet,Year,Month,Dist,SKU) different values"

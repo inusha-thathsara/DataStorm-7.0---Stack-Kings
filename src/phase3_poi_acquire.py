@@ -32,7 +32,21 @@ import time
 import datetime as dt
 from pathlib import Path
 
-import requests
+try:
+    import requests
+except ModuleNotFoundError:
+    import sys
+    print(
+        "ERROR: Missing package 'requests'.\n"
+        "  Option A (recommended): activate the project venv, then re-run:\n"
+        "    .venv\\Scripts\\activate          # Windows\n"
+        "    pip install -r requirements.txt\n"
+        "    python src/phase3_poi_acquire.py\n"
+        "  Option B: install into current Python:\n"
+        "    python -m pip install -r requirements.txt",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
 
 ROOT = Path(__file__).resolve().parents[1]
 POI_RAW_DIR = ROOT / "gold" / "features" / "poi_raw"
@@ -164,7 +178,7 @@ def main() -> None:
 
     all_records: list[dict] = []
 
-    print("=== Phase 3 – POI Acquisition (OpenStreetMap / Overpass) ===\n")
+    print("=== Phase 3 - POI Acquisition (OpenStreetMap / Overpass) ===\n")
     print(f"  Bounding box: {SL_BBOX}")
     print(f"  Categories  : {len(CATEGORIES)}\n")
 
@@ -173,7 +187,7 @@ def main() -> None:
 
         # ── Cache hit: skip if already downloaded ────────────────────────────
         if raw_path.exists():
-            print(f"  [{i}/{len(CATEGORIES)}] {canonical}: cache hit → {raw_path.name}")
+            print(f"  [{i}/{len(CATEGORIES)}] {canonical}: cache hit -> {raw_path.name}")
             with raw_path.open(encoding="utf-8") as fh:
                 data = json.load(fh)
         else:
@@ -183,7 +197,7 @@ def main() -> None:
             data = fetch_overpass(query, canonical)
 
             if data is None:
-                print(f"    Skipping {canonical} — no data received.")
+                print(f"    Skipping {canonical} - no data received.")
                 # Write empty placeholder so we don't retry indefinitely
                 with raw_path.open("w", encoding="utf-8") as fh:
                     json.dump({"elements": [], "error": "fetch_failed"}, fh)
@@ -197,7 +211,7 @@ def main() -> None:
 
         records = extract_elements(data, canonical)
         all_records.extend(records)
-        print(f"    {len(records):,} POIs extracted → {raw_path.name}")
+        print(f"    {len(records):,} POIs extracted -> {raw_path.name}")
 
     # ── Write normalised CSV ──────────────────────────────────────────────────
     fieldnames = [

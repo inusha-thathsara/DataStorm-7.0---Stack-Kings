@@ -1,6 +1,6 @@
 metric,kmeans,quantile_reg,ensemble
-median_ceiling_L,295.47,259.37,297.34
-p90_ceiling_L,1074.96,1074.35,1090.85
+median_ceiling_L,306.84,259.15,309.38
+p90_ceiling_L,1074.48,1074.75,1092.53
 max_ceiling_L,11480.78,10457.94,11480.78
-dominant_outlet_count,16464,3536,20000
-test_coverage_pct,100.0,89.8,100.0
+dominant_outlet_count,16805,3195,20000
+test_coverage_pct,100.0,90.1,100.0

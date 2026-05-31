@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-30T15:11:18.898646+00:00",
+  "generatedAt": "2026-05-31T17:11:16.392528+00:00",
   "outletCount": 20000,
   "schemaVersion": 2,
   "xaiIncludesFeatureWeights": true,
@@ -43,31 +43,31 @@
     "predictions_final": {
       "path": "gold\\predictions\\predictions_final.csv",
       "exists": true,
-      "mtime_iso": "2026-05-30T09:12:54.590563+00:00",
-      "size_bytes": 3252569
+      "mtime_iso": "2026-05-31T17:11:08.587159+00:00",
+      "size_bytes": 3256787
     },
     "outlet_features": {
       "path": "gold\\features\\outlet_features.csv",
       "exists": true,
-      "mtime_iso": "2026-05-30T09:15:14.666207+00:00",
-      "size_bytes": 5787695
+      "mtime_iso": "2026-05-31T17:10:40.960961+00:00",
+      "size_bytes": 5509021
     },
     "outlet_stats": {
       "path": "gold\\features\\outlet_stats.csv",
       "exists": true,
-      "mtime_iso": "2026-05-30T08:52:59.678376+00:00",
+      "mtime_iso": "2026-05-31T17:10:57.546461+00:00",
       "size_bytes": 1982613
     },
     "budget_allocations_raw": {
       "path": "gold\\predictions\\budget_allocations_raw.csv",
       "exists": true,
-      "mtime_iso": "2026-05-30T09:16:00.240917+00:00",
+      "mtime_iso": "2026-05-31T17:11:07.360773+00:00",
       "size_bytes": 788917
     },
     "optimization_report": {
       "path": "metadata\\optimization_report.csv",
       "exists": true,
-      "mtime_iso": "2026-05-30T09:16:00.274764+00:00",
+      "mtime_iso": "2026-05-31T17:11:07.383786+00:00",
       "size_bytes": 640
     }
   },
@@ -75,21 +75,21 @@
     "outlets.json": {
       "path": "app\\public\\data\\outlets.json",
       "exists": true,
-      "mtime_iso": "2026-05-30T15:11:18.883833+00:00",
-      "size_bytes": 39864785
+      "mtime_iso": "2026-05-31T17:11:16.376825+00:00",
+      "size_bytes": 39639852
     },
     "western_budget.json": {
       "path": "app\\public\\data\\western_budget.json",
       "exists": true,
-      "mtime_iso": "2026-05-30T15:11:18.897644+00:00",
+      "mtime_iso": "2026-05-31T17:11:16.391277+00:00",
       "size_bytes": 161230
     },
     "optimization_summary.json": {
       "path": "app\\public\\data\\optimization_summary.json",
       "exists": true,
-      "mtime_iso": "2026-05-30T15:11:18.898647+00:00",
+      "mtime_iso": "2026-05-31T17:11:16.391277+00:00",
       "size_bytes": 761
     }
   },
-  "predictions_sha256_prefix": "83beeaa78ac38354"
+  "predictions_sha256_prefix": "4475d55805dd303b"
 }

@@ -12,7 +12,7 @@ This document explains how to reproduce our solution **end to end**: data pipeli
 | Requirement | Notes |
 |-------------|--------|
 | **Python 3.11+** | Pipeline scripts in `src/` |
-| **numpy, scipy, requests** | `pip install numpy scipy requests` (or use a venv below) |
+| **numpy, scipy, requests** | `pip install -r requirements.txt` after activating `.venv` |
 | **Node.js 18+** | Web app only — see [Run the web app](#run-the-web-app) |
 | **Competition CSVs** | Required only for a **full rebuild** (`--full`); see below |
 
@@ -20,12 +20,14 @@ From the **repository root** (where this `README.md` lives):
 
 ```bash
 python -m venv .venv
-# Windows:
+# Windows — activate before any python src/... command:
 .venv\Scripts\activate
-.venv\Scripts\pip install numpy scipy requests
+.venv\Scripts\pip install -r requirements.txt
 # macOS/Linux:
-# source .venv/bin/activate && pip install numpy scipy requests
+# source .venv/bin/activate && pip install -r requirements.txt
 ```
+
+> **Tip:** If you see `ModuleNotFoundError: No module named 'requests'`, you are using system Python instead of the venv. Run `.venv\Scripts\activate` first, or use `.venv\Scripts\python src/...` directly.
 
 ### Option A — Standard run (recommended after clone)
 

@@ -465,7 +465,7 @@ if readme_path.exists():
     check("README: quick-start / run instructions", "python src/" in readme or "pip install" in readme)
     check("README: directory structure documented", "bronze" in readme and "silver" in readme)
     check("README: methodology explained", "censored" in readme or "lookalike" in readme)
-    check("README: submission file referenced", "submission.csv" in readme)
+    check("README: submission file referenced", "stackkings_predictions.csv" in readme)
     check("README: GenAI disclosure referenced", "genai" in readme)
     check("README: substantial (>= 80 lines)", len(readme.splitlines()) >= 80,
           f"{len(readme.splitlines())} lines")
