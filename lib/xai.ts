@@ -23,9 +23,7 @@ export {
 const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
 
 export function isOllamaEnabled(): boolean {
-  if (process.env.OLLAMA_ENABLED === "false") return false;
-  if (process.env.OLLAMA_ENABLED === "true") return true;
-  return Boolean(process.env.OLLAMA_BASE_URL?.trim());
+  return process.env.OLLAMA_ENABLED === "true";
 }
 
 function ollamaConfig() {

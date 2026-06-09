@@ -31,7 +31,7 @@ export function ExplainPanel({
         disabled={loading}
         className="min-w-[180px]"
       >
-        {loading ? "Generating… (Ollama may take 60–120s)" : "Explain this outlet"}
+        {loading ? "Generating…" : "Explain this outlet"}
       </Button>
 
       {error && (

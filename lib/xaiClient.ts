@@ -21,8 +21,9 @@ export type ExplainResult = {
 
 function clientOllamaConfig() {
   const enabled = process.env.NEXT_PUBLIC_OLLAMA_ENABLED;
-  if (enabled === "false") {
-    return { enabled: false, base: "", model: "", timeoutMs: 0 };
+  // Vercel / cloud deploy: Ollama off unless explicitly NEXT_PUBLIC_OLLAMA_ENABLED=true
+  if (enabled !== "true") {
+    return { enabled: false, base: "", model: "", timeoutMs: 0, numGpu: 0 };
   }
   const base = (process.env.NEXT_PUBLIC_OLLAMA_BASE_URL || DEFAULT_OLLAMA_BASE).replace(/\/$/, "");
   const model = process.env.NEXT_PUBLIC_OLLAMA_MODEL || DEFAULT_OLLAMA_MODEL;
@@ -130,29 +131,50 @@ async function fetchServerFallback(
 }
 
 /**
- * Browser-first XAI: Ollama on the client → server Gemini → template.
+ * Cloud deploy (Vercel): Gemini → template via /api/explain.
+ * Local hybrid: Ollama in browser when NEXT_PUBLIC_OLLAMA_ENABLED=true, else same cloud path.
  */
 export async function resolveExplanation(outlet: Outlet): Promise<ExplainResult> {
-  const ollamaAttempt = await fetchBrowserOllamaExplanation(outlet);
-  if ("result" in ollamaAttempt) {
-    return {
-      explanation: ollamaAttempt.result.text,
-      source: "ollama",
-      meta: ollamaAttempt.result.meta,
-    };
+  const { enabled: ollamaEnabled } = clientOllamaConfig();
+
+  if (ollamaEnabled) {
+    const ollamaAttempt = await fetchBrowserOllamaExplanation(outlet);
+    if ("result" in ollamaAttempt) {
+      return {
+        explanation: ollamaAttempt.result.text,
+        source: "ollama",
+        meta: ollamaAttempt.result.meta,
+      };
+    }
+
+    const ollamaError = ollamaAttempt.error;
+    try {
+      const fallback = await fetchServerFallback(outlet);
+      return {
+        explanation: fallback.explanation,
+        source: fallback.source,
+        meta: fallback.meta,
+        warning:
+          fallback.source === "template"
+            ? `Ollama unavailable (${ollamaError}). Used deterministic template.`
+            : `Ollama unavailable (${ollamaError}). Used ${fallback.source} fallback.`,
+      };
+    } catch (err) {
+      return {
+        explanation: "",
+        source: "template",
+        error: err instanceof Error ? err.message : "Explain request failed",
+      };
+    }
   }
 
-  const ollamaError = ollamaAttempt.error;
   try {
-    const fallback = await fetchServerFallback(outlet);
+    const cloud = await fetchServerFallback(outlet);
     return {
-      explanation: fallback.explanation,
-      source: fallback.source,
-      meta: fallback.meta,
-      warning:
-        fallback.source === "template"
-          ? `Ollama unavailable (${ollamaError}). Used deterministic template.`
-          : `Ollama unavailable (${ollamaError}). Used ${fallback.source} fallback.`,
+      explanation: cloud.explanation,
+      source: cloud.source,
+      meta: cloud.meta,
+      warning: cloud.warning,
     };
   } catch (err) {
     return {
