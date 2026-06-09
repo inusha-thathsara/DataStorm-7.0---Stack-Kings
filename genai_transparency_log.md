@@ -106,7 +106,7 @@ Use ONLY the facts in the JSON below. Do not invent numbers, metrics, or outlet 
 
 The JSON includes: `predictedLiters`, `ownMaxVol`, `gapLiters`, `recent3mAvg`, `province`, `distributorId`, `competitorDensity`, `competitorDensityZ`, `marketSaturation`, `dbscanZone`, `dbscanIsCore`, `clusterId`, `clusterCeiling`, `kmeansCeiling`, `qrCeiling`, `baseEnsemble`, `adjustedCeiling`, `janFactor`, `seasonalityLabel`, `coolerCount`, `outletSize`, `outletType`, `lat`, `lon`, `decayTransport`, `decayFood`, `decayWorship`, `decayTotal`, `tradeSpendLkr`, `predictedIncrementalLiters`, `dominantMethod`, `adjustmentFactor`.
 
-**Ollama request settings:** `think: false`, `temperature: 0.2`, `num_predict: 512`, default model `gemma4:e4b`, timeout 25s.
+**Ollama request settings:** `think: false`, `temperature: 0.2`, `num_predict: 512`, default model `gemma4:e4b`, timeout 120s (`OLLAMA_TIMEOUT_MS`).
 
 **Gemini request settings:** `gemini-2.0-flash` (override via `GEMINI_MODEL`), `temperature: 0.2`, `maxOutputTokens: 300`.
 

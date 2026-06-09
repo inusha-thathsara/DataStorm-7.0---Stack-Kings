@@ -61,11 +61,16 @@ def ollama_explain(outlet: dict) -> str | None:
         return None
     base = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
     model = os.environ.get("OLLAMA_MODEL", "gemma4:e4b")
+    try:
+        num_gpu = int(os.environ.get("OLLAMA_NUM_GPU", "999"))
+    except ValueError:
+        num_gpu = 999
     prompt = build_xai_prompt(outlet)
     body = json.dumps({
         "model": model,
         "stream": False,
         "think": False,
+        "keep_alive": "10m",
         "messages": [
             {
                 "role": "system",
@@ -76,7 +81,12 @@ def ollama_explain(outlet: dict) -> str | None:
             },
             {"role": "user", "content": prompt},
         ],
-        "options": {"temperature": 0.2, "num_predict": 512},
+        "options": {
+            "temperature": 0.2,
+            "num_predict": 512,
+            "num_gpu": num_gpu,
+            "main_gpu": 0,
+        },
     }).encode("utf-8")
     req = urllib.request.Request(
         f"{base}/api/chat",
@@ -85,7 +95,8 @@ def ollama_explain(outlet: dict) -> str | None:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=25) as resp:
+        timeout_s = int(os.environ.get("OLLAMA_TIMEOUT_MS", "120000")) // 1000 or 120
+        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         text = (data.get("message") or {}).get("content", "").strip()
         return text or None

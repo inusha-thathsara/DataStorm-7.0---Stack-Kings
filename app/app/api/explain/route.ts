@@ -2,10 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Outlet } from "@/lib/types";
 import { buildTemplateExplanation, resolveHybridExplanation } from "@/lib/xai";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+type ExplainRequestBody = {
+  outlet?: Outlet;
+  skipOllama?: boolean;
+};
+
 export async function POST(req: NextRequest) {
-  let outlet: Outlet;
+  let body: ExplainRequestBody;
   try {
-    outlet = await req.json();
+    body = await req.json();
   } catch {
     return NextResponse.json(
       { error: "Invalid JSON body", explanation: "", source: "template" as const },
@@ -13,6 +21,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const outlet = body.outlet;
   if (!outlet?.id) {
     return NextResponse.json(
       { error: "Missing outlet id", explanation: "", source: "template" as const },
@@ -21,8 +30,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { explanation, source } = await resolveHybridExplanation(outlet);
-    return NextResponse.json({ explanation, source });
+    const { explanation, source, meta, warning } = await resolveHybridExplanation(outlet, {
+      skipOllama: body.skipOllama === true,
+    });
+    return NextResponse.json({ explanation, source, meta, warning });
   } catch (err) {
     console.error("[/api/explain]", err);
     return NextResponse.json({

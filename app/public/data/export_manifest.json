@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-31T17:11:16.392528+00:00",
+  "generatedAt": "2026-06-09T12:11:12.450958+00:00",
   "outletCount": 20000,
   "schemaVersion": 2,
   "xaiIncludesFeatureWeights": true,
@@ -49,8 +49,8 @@
     "outlet_features": {
       "path": "gold\\features\\outlet_features.csv",
       "exists": true,
-      "mtime_iso": "2026-05-31T17:10:40.960961+00:00",
-      "size_bytes": 5509021
+      "mtime_iso": "2026-05-31T17:13:41.645792+00:00",
+      "size_bytes": 5787695
     },
     "outlet_stats": {
       "path": "gold\\features\\outlet_stats.csv",
@@ -75,19 +75,19 @@
     "outlets.json": {
       "path": "app\\public\\data\\outlets.json",
       "exists": true,
-      "mtime_iso": "2026-05-31T17:11:16.376825+00:00",
-      "size_bytes": 39639852
+      "mtime_iso": "2026-06-09T12:11:12.424288+00:00",
+      "size_bytes": 39868255
     },
     "western_budget.json": {
       "path": "app\\public\\data\\western_budget.json",
       "exists": true,
-      "mtime_iso": "2026-05-31T17:11:16.391277+00:00",
+      "mtime_iso": "2026-06-09T12:11:12.437854+00:00",
       "size_bytes": 161230
     },
     "optimization_summary.json": {
       "path": "app\\public\\data\\optimization_summary.json",
       "exists": true,
-      "mtime_iso": "2026-05-31T17:11:16.391277+00:00",
+      "mtime_iso": "2026-06-09T12:11:12.450466+00:00",
       "size_bytes": 761
     }
   },

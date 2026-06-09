@@ -73,3 +73,12 @@ export type OutletsData = {
 
 /** Which backend produced the outlet XAI narrative */
 export type ExplainSource = "ollama" | "gemini" | "template";
+
+/** Proof-of-inference metadata from a verified Ollama /api/chat response */
+export type ExplainMeta = {
+  model: string;
+  evalCount: number;
+  totalDurationMs: number;
+  loadDurationMs: number;
+  promptEvalCount: number;
+};

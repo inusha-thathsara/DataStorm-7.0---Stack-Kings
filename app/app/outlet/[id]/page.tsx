@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Alert } from "@/components/ui/Alert";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { LoadingState } from "@/components/ui/Skeleton";
-import type { ExplainSource, Outlet, OutletsData } from "@/lib/types";
+import { resolveExplanation } from "@/lib/xaiClient";
+import type { ExplainMeta, ExplainSource, Outlet, OutletsData } from "@/lib/types";
 import Link from "next/link";
 
 const OutletMap = dynamic(
@@ -36,6 +37,8 @@ export default function OutletPage({ params }: { params: { id: string } }) {
   const [explainError, setExplainError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [source, setSource] = useState<ExplainSource>("template");
+  const [explainMeta, setExplainMeta] = useState<ExplainMeta | null>(null);
+  const [explainWarning, setExplainWarning] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,21 +70,22 @@ export default function OutletPage({ params }: { params: { id: string } }) {
     if (!outlet) return;
     setLoading(true);
     setExplainError(null);
+    setExplainWarning(null);
+    setExplainMeta(null);
     try {
-      const res = await fetch("/api/explain", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(outlet),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.explanation) {
-        throw new Error(data.error || `Explain failed (HTTP ${res.status})`);
+      const result = await resolveExplanation(outlet);
+      if (result.error && !result.explanation) {
+        throw new Error(result.error);
       }
-      setExplanation(data.explanation);
-      setSource(data.source ?? "template");
+      setExplanation(result.explanation);
+      setSource(result.source);
+      setExplainMeta(result.meta ?? null);
+      setExplainWarning(result.warning ?? null);
     } catch (err) {
       setExplainError(err instanceof Error ? err.message : "Explain request failed");
       setExplanation("");
+      setExplainMeta(null);
+      setExplainWarning(null);
     } finally {
       setLoading(false);
     }
@@ -260,6 +264,8 @@ export default function OutletPage({ params }: { params: { id: string } }) {
         loading={loading}
         explanation={explanation}
         source={source}
+        meta={explainMeta}
+        warning={explainWarning}
         error={explainError}
         onExplain={explain}
       />

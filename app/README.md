@@ -29,25 +29,43 @@ Open http://localhost:3000
 
 ## Optional: Hybrid XAI (Ollama + Gemini)
 
-Copy `.env.example` to `.env.local` and configure any combination:
+Copy `.env.example` to `.env.local` and configure any combination.
 
-| Variable | Purpose |
-|----------|---------|
-| `OLLAMA_ENABLED=true` | Try local Ollama first (requires Ollama **0.20+**) |
-| `OLLAMA_BASE_URL` | Ollama host (default `http://127.0.0.1:11434`) |
-| `OLLAMA_MODEL` | Model tag (default `gemma4:e4b` — Gemma 4 Effective 4B) |
+**Explain this outlet** calls **Ollama directly from your browser** (not via the Next.js server), so inference runs in the Ollama process you can see in Task Manager / `ollama ps`. The UI only shows **Ollama (local LLM)** when Ollama returns `eval_count > 0` (real generated tokens).
 
-Pull the model once:
+### Ollama setup (required for local LLM)
 
 ```bash
 ollama pull gemma4:e4b
 ```
 
-| `GEMINI_API_KEY` | Cloud fallback via Gemini 2.0 Flash (`GEMINI_MODEL` optional) |
+**GPU-first (recommended on Windows):** stop any running Ollama, then from the repo root:
 
-**Resolution order:** Ollama (local) → Gemini (API) → deterministic template.
+```powershell
+.\scripts\start-ollama-gpu.ps1
+```
 
-Without Ollama or Gemini, the template fallback always works offline.
+This sets `OLLAMA_NUM_GPU_LAYERS=9999`, flash attention, and CORS for the app. Each Explain request also sends `options.num_gpu=999` and `main_gpu=0` so Ollama offloads as many layers as VRAM allows.
+
+Verify GPU usage while explaining an outlet:
+
+```bash
+ollama ps
+```
+
+You want a high **GPU** share in the `PROCESSOR` column (e.g. `20%/80% CPU/GPU` or `100% GPU`). `gemma4:e4b` is ~9.6 GB — if VRAM is smaller, Ollama splits layers across CPU/GPU. Use a smaller model (`gemma4:e2b`) or free VRAM if GPU stays low.
+
+| Variable | Purpose |
+|----------|---------|
+| `NEXT_PUBLIC_OLLAMA_ENABLED=true` | Browser calls Ollama at `NEXT_PUBLIC_OLLAMA_BASE_URL` |
+| `NEXT_PUBLIC_OLLAMA_MODEL` | Model tag (default `gemma4:e4b`) |
+| `NEXT_PUBLIC_OLLAMA_TIMEOUT_MS` | Default **120000** — gemma4:e4b often needs 60–120s |
+| `NEXT_PUBLIC_OLLAMA_NUM_GPU` | Default **999** — max GPU layer offload (`0` = CPU-only) |
+| `GEMINI_API_KEY` | Server fallback via Gemini 2.0 Flash |
+
+**Resolution order:** Browser Ollama → Gemini (server) → deterministic template (labeled honestly).
+
+Without Ollama or Gemini, the template fallback always works offline and is labeled **Deterministic template (fallback)**.
 
 ### Fix “Cannot find module './276.js'” or blank server errors
 
@@ -65,7 +83,7 @@ Hard refresh the browser (Ctrl+Shift+R) if needed.
 ### Troubleshooting XAI (template fallback only)
 
 1. **Restart the server** after editing `.env.local` (`Ctrl+C`, then `npm run dev:clean` or rebuild + `npm run start`).
-2. **Ollama + `gemma4:e4b`:** the app sends `think: false` so the model returns text in `content` (otherwise thinking can use all tokens and leave `content` empty).
+2. **Ollama + `gemma4:e4b`:** browser calls `http://127.0.0.1:11434/api/chat` with `think: false`. Set `OLLAMA_ORIGINS=http://localhost:3000` and restart Ollama if the browser cannot reach it (CORS). Badge shows **token count + duration** as proof of inference. GPU may stay low if Ollama runs mostly on CPU — check `ollama ps`. Default timeout is **120s** — local `gemma4:e4b` often needs 45–90s on first request (model load). Increase `OLLAMA_TIMEOUT_MS` if you still see template fallback.
 3. **Gemini:** default model is `gemini-2.0-flash` (`gemini-1.5-flash` often returns 404). Use an [AI Studio](https://aistudio.google.com/apikey) API key. HTTP **429** = quota/rate limit — wait and retry.
 4. Confirm Ollama: `ollama list` shows `gemma4:e4b`, and `ollama serve` is running.
 
