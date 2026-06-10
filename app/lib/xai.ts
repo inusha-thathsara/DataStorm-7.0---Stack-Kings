@@ -85,6 +85,31 @@ function geminiApiKey(): string | null {
   return key;
 }
 
+function buildGeminiGenerationConfig(model: string): Record<string, unknown> {
+  const config: Record<string, unknown> = {
+    temperature: 0.2,
+    maxOutputTokens: 1024,
+  };
+  // Gemini 2.5 counts internal thinking tokens against maxOutputTokens by default.
+  // Disable thinking so the full budget is used for the visible explanation.
+  if (/gemini-2\.5/i.test(model)) {
+    config.thinkingConfig = { thinkingBudget: 0 };
+  }
+  return config;
+}
+
+function parseGeminiResponseText(data: unknown): string | null {
+  const parts = (data as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] })
+    ?.candidates?.[0]?.content?.parts;
+  if (!parts?.length) return null;
+  const text = parts
+    .filter((p) => p.text && !p.thought)
+    .map((p) => p.text!)
+    .join("")
+    .trim();
+  return text || null;
+}
+
 export async function fetchGeminiExplanation(
   outlet: Outlet,
   apiKey: string
@@ -99,15 +124,20 @@ export async function fetchGeminiExplanation(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 300 },
+          generationConfig: buildGeminiGenerationConfig(model),
         }),
       }
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.warn(`[xai/gemini] HTTP ${res.status}: ${errBody.slice(0, 200)}`);
+      return null;
+    }
     const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    return text || null;
-  } catch {
+    return parseGeminiResponseText(data);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[xai/gemini] request failed: ${msg}`);
     return null;
   }
 }
