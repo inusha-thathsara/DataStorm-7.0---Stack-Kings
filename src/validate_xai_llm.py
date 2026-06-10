@@ -108,7 +108,7 @@ def gemini_explain(outlet: dict) -> str | None:
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not key or key == "your_gemini_key_here":
         return None
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
     prompt = build_xai_prompt(outlet)
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/{model}"

@@ -20,7 +20,7 @@ export {
   formatExplainMeta,
 } from "./xaiShared";
 
-const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
 export function isOllamaEnabled(): boolean {
   if (process.env.OLLAMA_ENABLED === "false") return false;

@@ -108,7 +108,7 @@ The JSON includes: `predictedLiters`, `ownMaxVol`, `gapLiters`, `recent3mAvg`, `
 
 **Ollama request settings:** `think: false`, `temperature: 0.2`, `num_predict: 512`, default model `gemma4:e4b`, timeout 120s (`OLLAMA_TIMEOUT_MS`).
 
-**Gemini request settings:** `gemini-2.0-flash` (override via `GEMINI_MODEL`), `temperature: 0.2`, `maxOutputTokens: 300`.
+**Gemini request settings:** `gemini-2.5-flash` (override via `GEMINI_MODEL`), `temperature: 0.2`, `maxOutputTokens: 300`.
 
 ### Hybrid resolution order (`POST /api/explain`)
 

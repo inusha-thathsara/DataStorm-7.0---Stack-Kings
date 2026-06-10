@@ -84,7 +84,7 @@ Hard refresh the browser (Ctrl+Shift+R) if needed.
 
 1. **Restart the server** after editing `.env.local` (`Ctrl+C`, then `npm run dev:clean` or rebuild + `npm run start`).
 2. **Ollama + `gemma4:e4b`:** browser calls `http://127.0.0.1:11434/api/chat` with `think: false`. Set `OLLAMA_ORIGINS=http://localhost:3000` and restart Ollama if the browser cannot reach it (CORS). Badge shows **token count + duration** as proof of inference. GPU may stay low if Ollama runs mostly on CPU — check `ollama ps`. Default timeout is **120s** — local `gemma4:e4b` often needs 45–90s on first request (model load). Increase `OLLAMA_TIMEOUT_MS` if you still see template fallback.
-3. **Gemini:** default model is `gemini-2.0-flash` (`gemini-1.5-flash` often returns 404). Use an [AI Studio](https://aistudio.google.com/apikey) API key. HTTP **429** = quota/rate limit — wait and retry.
+3. **Gemini:** default model is `gemini-2.5-flash` (override via `GEMINI_MODEL`). Use an [AI Studio](https://aistudio.google.com/apikey) API key. HTTP **429** = quota/rate limit — wait and retry.
 4. Confirm Ollama: `ollama list` shows `gemma4:e4b`, and `ollama serve` is running.
 
 Validate template factuality:
