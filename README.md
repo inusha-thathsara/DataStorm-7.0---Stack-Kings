@@ -12,7 +12,7 @@ Next.js app for browsing 20,000 FMCG outlet predictions. This branch contains **
 3. Framework preset: **Next.js** (auto-detected).
 4. Add environment variable in Vercel dashboard:
    - `GEMINI_API_KEY` — [Google AI Studio](https://aistudio.google.com/apikey) key for Explain XAI
-   - Optional: `GEMINI_MODEL=gemini-2.0-flash`
+   - Optional: `GEMINI_MODEL=gemini-2.5-flash`
 5. Deploy.
 
 **XAI on Vercel:** Gemini API → deterministic template fallback. Local Ollama is **not** used on this branch.
