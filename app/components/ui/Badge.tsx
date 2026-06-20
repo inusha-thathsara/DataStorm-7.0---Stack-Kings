@@ -8,11 +8,11 @@ type Props = HTMLAttributes<HTMLSpanElement> & {
 };
 
 const tones: Record<Tone, string> = {
-  default: "bg-slate-100 text-slate-700",
-  success: "bg-emerald-100 text-emerald-800",
-  warning: "bg-amber-100 text-amber-900",
-  info: "bg-blue-100 text-blue-800",
-  muted: "bg-slate-50 text-slate-500 border border-slate-200",
+  default: "bg-surface-muted text-text-secondary",
+  success: "bg-semantic-success-bg text-emerald-800",
+  warning: "bg-semantic-warning-bg text-amber-900",
+  info: "bg-semantic-info-bg text-blue-800",
+  muted: "bg-surface-card text-text-muted border border-border",
 };
 
 export function Badge({ className, tone = "default", ...props }: Props) {

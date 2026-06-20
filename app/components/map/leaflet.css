@@ -1,0 +1,12 @@
+/* Leaflet container sizing inside our card layout */
+.osm-map-container {
+  width: 100%;
+  min-height: 320px;
+  height: 420px;
+  border-radius: 0.5rem;
+  z-index: 0;
+}
+
+.osm-map-container .leaflet-control-attribution {
+  font-size: 10px;
+}

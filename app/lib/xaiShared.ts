@@ -1,7 +1,7 @@
 import type { ExplainMeta, ModelDrivers, Outlet, QrFeatureDriver } from "./types";
 
 export const DEFAULT_OLLAMA_BASE = "http://127.0.0.1:11434";
-export const DEFAULT_OLLAMA_MODEL = "gemma4:e4b";
+export const DEFAULT_OLLAMA_MODEL = "gemma4:e2b";
 export const DEFAULT_OLLAMA_TIMEOUT_MS = 120_000;
 /** Request max GPU layer offload (Ollama caps at VRAM). 0 = CPU-only — never use for XAI. */
 export const DEFAULT_OLLAMA_NUM_GPU = 999;

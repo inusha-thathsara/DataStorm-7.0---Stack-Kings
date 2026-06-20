@@ -1,14 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ExplainPanel } from "@/components/ExplainPanel";
 import { Badge } from "@/components/ui/Badge";
 import { Alert } from "@/components/ui/Alert";
-import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Card, CardTitle, PanelHeader, PanelHeaderTitle } from "@/components/ui/Card";
+import { MetricRow } from "@/components/ui/MetricRow";
 import { LoadingState } from "@/components/ui/Skeleton";
 import { resolveExplanation } from "@/lib/xaiClient";
-import type { ExplainMeta, ExplainSource, Outlet, OutletsData } from "@/lib/types";
+import type { ExplainMeta, ExplainSource, Outlet } from "@/lib/types";
 import Link from "next/link";
 
 const OutletMap = dynamic(
@@ -18,15 +19,6 @@ const OutletMap = dynamic(
 
 function num(v: number | undefined, digits = 1): string {
   return (v ?? 0).toFixed(digits);
-}
-
-function MetricRow({ label, value }: { label: string; value: string }) {
-  return (
-    <p className="text-sm text-slate-700">
-      <span className="text-slate-500">{label}: </span>
-      <span className="font-medium text-slate-900">{value}</span>
-    </p>
-  );
 }
 
 export default function OutletPage({ params }: { params: { id: string } }) {
@@ -44,16 +36,16 @@ export default function OutletPage({ params }: { params: { id: string } }) {
     let cancelled = false;
     setDataLoading(true);
     setLoadError(null);
-    fetch("/data/outlets.json")
+    fetch(`/api/outlets/${encodeURIComponent(params.id)}`)
       .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status} loading outlets.json`);
+        if (r.status === 403) throw new Error("FORBIDDEN");
+        if (r.status === 404) throw new Error(`Outlet ${params.id} not found in export.`);
+        if (!r.ok) throw new Error(`HTTP ${r.status} loading outlet`);
         return r.json();
       })
-      .then((data: OutletsData) => {
+      .then((data: { outlet: Outlet }) => {
         if (cancelled) return;
-        const found = data.outlets.find((o) => o.id === params.id) ?? null;
-        setOutlet(found);
-        if (!found) setLoadError(`Outlet ${params.id} not found in export.`);
+        setOutlet(data.outlet);
       })
       .catch((err: Error) => {
         if (!cancelled) setLoadError(err.message || "Failed to load outlet data");
@@ -96,12 +88,31 @@ export default function OutletPage({ params }: { params: { id: string } }) {
   }
 
   if (loadError) {
+    if (loadError === "FORBIDDEN") {
+      return (
+        <div>
+          <Link
+            href="/forbidden"
+            className="inline-flex items-center gap-1 text-sm font-medium text-brand-accent transition-colors hover:text-brand-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
+          >
+            View access details
+          </Link>
+          <Alert title="Access denied" variant="warning" className="mt-4">
+            This outlet is outside your assigned scope. Western-scoped accounts can only view
+            Western Province outlets.
+          </Alert>
+        </div>
+      );
+    }
     return (
       <div>
-        <Link href="/" className="text-sm font-medium text-emerald-700 hover:underline">
-          ← Back to browse
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1 text-sm font-medium text-brand-accent transition-colors hover:text-brand-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
+        >
+          <span aria-hidden>←</span> Back to browse
         </Link>
-        <Alert title="Could not load outlet" className="mt-4">
+        <Alert title="Could not load outlet" variant="error" className="mt-4">
           {loadError}
         </Alert>
       </div>
@@ -110,44 +121,75 @@ export default function OutletPage({ params }: { params: { id: string } }) {
 
   if (!outlet) {
     return (
-      <p className="text-slate-600">
+      <p className="text-text-secondary">
         Outlet not found.{" "}
-        <Link href="/" className="font-medium text-emerald-700 hover:underline">
+        <Link
+          href="/"
+          className="font-medium text-brand-accent hover:text-brand-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-1"
+        >
           Back
         </Link>
       </p>
     );
   }
 
+  const upliftPct =
+    outlet.ownMaxVol > 0
+      ? ((outlet.predictedLiters / outlet.ownMaxVol - 1) * 100).toFixed(0)
+      : null;
+
   return (
-    <div>
-      <Link href="/" className="text-sm font-medium text-emerald-700 hover:underline">
-        ← Back to browse
+    <div className="space-y-4">
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1 text-sm font-medium text-brand-accent transition-colors hover:text-brand-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
+      >
+        <span aria-hidden>←</span> Back to browse
       </Link>
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-        <h2 className="text-2xl font-bold tracking-tight text-slate-900">{outlet.id}</h2>
-        <div className="flex flex-wrap gap-2">
-          <Badge tone="default">{outlet.province}</Badge>
-          <Badge tone="muted">{outlet.distributorId}</Badge>
-          <Badge tone="default">{outlet.outletType}</Badge>
-          <Badge tone="default">{outlet.outletSize}</Badge>
+      <Card className="overflow-hidden p-0 shadow-card">
+        <div className="border-b border-border-muted bg-gradient-to-r from-surface-muted to-semantic-success-bg/30 px-5 py-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-display-sm text-text-primary">{outlet.id}</h1>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Badge tone="default">{outlet.province}</Badge>
+                <Badge tone="muted">{outlet.distributorId}</Badge>
+                <Badge tone="default">{outlet.outletType}</Badge>
+                <Badge tone="default">{outlet.outletSize}</Badge>
+              </div>
+            </div>
+            <div className="text-left sm:text-right">
+              <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                Predicted Jan 2026
+              </p>
+              <p className="text-display-lg tabular-nums text-brand-accent">
+                {num(outlet.predictedLiters)}{" "}
+                <span className="text-lg font-semibold text-text-muted">L</span>
+              </p>
+              {upliftPct !== null && (
+                <Badge tone="success" className="mt-1">
+                  +{upliftPct}% above historical max
+                </Badge>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      </Card>
 
-      <div className="mt-4">
-        <OutletMap outlets={[outlet]} highlightId={outlet.id} />
-      </div>
+      <OutletMap outlets={[outlet]} highlightId={outlet.id} showDetailLinks={false} />
 
-      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Predicted potential</CardTitle>
-          </CardHeader>
-          <div className="space-y-2">
-            <p className="text-2xl font-bold text-emerald-700">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <Card className="shadow-card">
+          <PanelHeader className="mb-0 border-0 bg-transparent px-0 py-0">
+            <PanelHeaderTitle className="normal-case tracking-normal text-base text-text-primary">
+              Predicted potential
+            </PanelHeaderTitle>
+          </PanelHeader>
+          <div className="mt-3 space-y-2">
+            <p className="text-2xl font-bold text-brand-accent">
               {num(outlet.predictedLiters)} L
-              <span className="ml-1 text-sm font-normal text-slate-500">/ month (Jan 2026)</span>
+              <span className="ml-1 text-sm font-normal text-text-muted">/ month (Jan 2026)</span>
             </p>
             <MetricRow label="Historical max" value={`${num(outlet.ownMaxVol)} L`} />
             <MetricRow label="Recent 3m avg" value={`${num(outlet.recent3mAvg)} L`} />
@@ -157,11 +199,13 @@ export default function OutletPage({ params }: { params: { id: string } }) {
           </div>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Model traceability</CardTitle>
-          </CardHeader>
-          <div className="space-y-2">
+        <Card className="shadow-card">
+          <PanelHeader className="mb-0 border-0 bg-transparent px-0 py-0">
+            <PanelHeaderTitle className="normal-case tracking-normal text-base text-text-primary">
+              Model traceability
+            </PanelHeaderTitle>
+          </PanelHeader>
+          <div className="mt-3 space-y-2">
             <MetricRow label="Cluster" value={`${outlet.clusterId || "—"} (ceiling ${num(outlet.clusterCeiling)} L)`} />
             <MetricRow label="K-Means ceiling" value={`${num(outlet.kmeansCeiling)} L`} />
             <MetricRow label="QR ceiling (τ=0.90)" value={`${num(outlet.qrCeiling)} L`} />
@@ -171,9 +215,9 @@ export default function OutletPage({ params }: { params: { id: string } }) {
             <MetricRow label="Dominant method" value={outlet.dominantMethod} />
             {outlet.modelDrivers && (
               <>
-                <p className="pt-2 text-xs text-slate-500">{outlet.modelDrivers.kmeansPeerSignal}</p>
+                <p className="pt-2 text-xs text-text-muted">{outlet.modelDrivers.kmeansPeerSignal}</p>
                 {outlet.modelDrivers.competition && (
-                  <p className="text-xs text-slate-600">
+                  <p className="text-xs text-text-secondary">
                     Competition: penalty ×
                     {(outlet.modelDrivers.competition.saturationPenalty ?? 0).toFixed(3)}, boost ×
                     {(outlet.modelDrivers.competition.isolationBoost ?? 0).toFixed(3)}
@@ -185,14 +229,16 @@ export default function OutletPage({ params }: { params: { id: string } }) {
         </Card>
 
         {outlet.modelDrivers?.qrTopDrivers && outlet.modelDrivers.qrTopDrivers.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Feature importance (QR τ=0.90)</CardTitle>
-            </CardHeader>
-            <div className="overflow-x-auto">
+          <Card className="shadow-card">
+            <PanelHeader className="mb-0 border-0 bg-transparent px-0 py-0">
+              <PanelHeaderTitle className="normal-case tracking-normal text-base text-text-primary">
+                Feature importance (QR τ=0.90)
+              </PanelHeaderTitle>
+            </PanelHeader>
+            <div className="mt-3 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase text-slate-500">
+                  <tr className="border-b border-border text-left text-xs font-semibold uppercase text-text-muted">
                     <th className="pb-2 pr-2">Driver</th>
                     <th className="pb-2 pr-2">Weight</th>
                     <th className="pb-2">Contrib. (L)</th>
@@ -200,12 +246,12 @@ export default function OutletPage({ params }: { params: { id: string } }) {
                 </thead>
                 <tbody>
                   {outlet.modelDrivers.qrTopDrivers.map((d) => (
-                    <tr key={d.feature} className="border-b border-slate-50">
-                      <td className="py-2 pr-2 text-slate-800">{d.label}</td>
-                      <td className="py-2 pr-2 tabular-nums text-slate-600">{d.weight.toFixed(4)}</td>
+                    <tr key={d.feature} className="border-b border-border-muted">
+                      <td className="py-2 pr-2 text-text-primary">{d.label}</td>
+                      <td className="py-2 pr-2 tabular-nums text-text-secondary">{d.weight.toFixed(4)}</td>
                       <td
                         className={`py-2 tabular-nums font-medium ${
-                          d.direction === "up" ? "text-emerald-700" : "text-amber-700"
+                          d.direction === "up" ? "text-brand-accent" : "text-semantic-warning"
                         }`}
                       >
                         {d.contributionLiters > 0 ? "+" : ""}
@@ -219,11 +265,13 @@ export default function OutletPage({ params }: { params: { id: string } }) {
           </Card>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Local environment</CardTitle>
-          </CardHeader>
-          <div className="space-y-2">
+        <Card className="shadow-card">
+          <PanelHeader className="mb-0 border-0 bg-transparent px-0 py-0">
+            <PanelHeaderTitle className="normal-case tracking-normal text-base text-text-primary">
+              Local environment
+            </PanelHeaderTitle>
+          </PanelHeader>
+          <div className="mt-3 space-y-2">
             <MetricRow label="Saturation" value={outlet.marketSaturation} />
             <MetricRow
               label="Competitor density"
@@ -244,7 +292,7 @@ export default function OutletPage({ params }: { params: { id: string } }) {
       </div>
 
       {outlet.tradeSpendLkr > 0 && (
-        <Card className="mt-4 border-emerald-200 bg-emerald-50">
+        <Card className="border-emerald-200 bg-semantic-success-bg shadow-card">
           <CardTitle className="text-emerald-900">Western Province trade spend</CardTitle>
           <p className="mt-2 text-sm text-emerald-800">
             Allocation:{" "}

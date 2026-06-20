@@ -1,10 +1,7 @@
-/** Sri Lanka bounding box for outlet scatter map */
-export const SL_BOUNDS = {
-  latMin: 5.85,
-  latMax: 9.95,
-  lonMin: 79.65,
-  lonMax: 81.95,
-};
+import { SL_BOUNDS } from "./map/bounds";
+
+/** @deprecated Use `@/lib/map/bounds` — SVG projection helper only */
+export { SL_BOUNDS };
 
 export function projectLatLon(
   lat: number,

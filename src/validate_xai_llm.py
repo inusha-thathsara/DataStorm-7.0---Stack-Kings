@@ -60,7 +60,7 @@ def ollama_explain(outlet: dict) -> str | None:
     if os.environ.get("OLLAMA_ENABLED", "").lower() == "false":
         return None
     base = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-    model = os.environ.get("OLLAMA_MODEL", "gemma4:e4b")
+    model = os.environ.get("OLLAMA_MODEL", "gemma4:e2b")
     try:
         num_gpu = int(os.environ.get("OLLAMA_NUM_GPU", "999"))
     except ValueError:

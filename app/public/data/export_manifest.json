@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-09T12:11:12.450958+00:00",
+  "generatedAt": "2026-06-17T16:38:09.953738+00:00",
   "outletCount": 20000,
   "schemaVersion": 2,
   "xaiIncludesFeatureWeights": true,
@@ -43,31 +43,31 @@
     "predictions_final": {
       "path": "gold\\predictions\\predictions_final.csv",
       "exists": true,
-      "mtime_iso": "2026-05-31T17:11:08.587159+00:00",
+      "mtime_iso": "2026-06-10T16:34:58.571714+00:00",
       "size_bytes": 3256787
     },
     "outlet_features": {
       "path": "gold\\features\\outlet_features.csv",
       "exists": true,
-      "mtime_iso": "2026-05-31T17:13:41.645792+00:00",
+      "mtime_iso": "2026-06-10T16:34:58.533309+00:00",
       "size_bytes": 5787695
     },
     "outlet_stats": {
       "path": "gold\\features\\outlet_stats.csv",
       "exists": true,
-      "mtime_iso": "2026-05-31T17:10:57.546461+00:00",
+      "mtime_iso": "2026-06-10T16:34:58.547067+00:00",
       "size_bytes": 1982613
     },
     "budget_allocations_raw": {
       "path": "gold\\predictions\\budget_allocations_raw.csv",
       "exists": true,
-      "mtime_iso": "2026-05-31T17:11:07.360773+00:00",
+      "mtime_iso": "2026-06-10T16:34:58.554592+00:00",
       "size_bytes": 788917
     },
     "optimization_report": {
       "path": "metadata\\optimization_report.csv",
       "exists": true,
-      "mtime_iso": "2026-05-31T17:11:07.383786+00:00",
+      "mtime_iso": "2026-06-10T16:34:58.599445+00:00",
       "size_bytes": 640
     }
   },
@@ -75,19 +75,19 @@
     "outlets.json": {
       "path": "app\\public\\data\\outlets.json",
       "exists": true,
-      "mtime_iso": "2026-06-09T12:11:12.424288+00:00",
+      "mtime_iso": "2026-06-17T16:38:09.937618+00:00",
       "size_bytes": 39868255
     },
     "western_budget.json": {
       "path": "app\\public\\data\\western_budget.json",
       "exists": true,
-      "mtime_iso": "2026-06-09T12:11:12.437854+00:00",
+      "mtime_iso": "2026-06-17T16:38:09.952196+00:00",
       "size_bytes": 161230
     },
     "optimization_summary.json": {
       "path": "app\\public\\data\\optimization_summary.json",
       "exists": true,
-      "mtime_iso": "2026-06-09T12:11:12.450466+00:00",
+      "mtime_iso": "2026-06-17T16:38:09.953180+00:00",
       "size_bytes": 761
     }
   },

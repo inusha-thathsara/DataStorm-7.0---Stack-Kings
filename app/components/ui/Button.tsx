@@ -2,29 +2,38 @@ import { cn } from "@/lib/utils";
 import type { ButtonHTMLAttributes } from "react";
 
 type Variant = "primary" | "ghost" | "outline";
+type Size = "sm" | "md" | "lg";
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant;
+  size?: Size;
 };
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500 disabled:bg-emerald-300",
+    "bg-brand-accent text-text-inverse hover:bg-brand-accent-hover focus-visible:ring-brand-accent disabled:bg-emerald-300",
   ghost:
-    "bg-transparent text-slate-700 hover:bg-slate-100 focus-visible:ring-slate-400 disabled:text-slate-400",
+    "bg-transparent text-text-secondary hover:bg-surface-muted focus-visible:ring-slate-400 disabled:text-text-muted",
   outline:
-    "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-400 disabled:border-slate-200 disabled:text-slate-400",
+    "border border-border bg-surface-card text-text-secondary hover:bg-surface-muted focus-visible:ring-slate-400 disabled:border-border-muted disabled:text-text-muted",
 };
 
-export function Button({ className, variant = "outline", ...props }: Props) {
+const sizes: Record<Size, string> = {
+  sm: "h-7 px-2.5 text-xs",
+  md: "h-9 px-4 text-sm",
+  lg: "h-11 px-6 text-base",
+};
+
+export function Button({ className, variant = "outline", size = "md", ...props }: Props) {
   return (
     <button
       type="button"
       className={cn(
-        "inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium",
+        "inline-flex items-center justify-center rounded-md font-medium",
         "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
         "disabled:cursor-not-allowed disabled:opacity-60",
         variants[variant],
+        sizes[size],
         className
       )}
       {...props}

@@ -3,12 +3,98 @@
 @tailwind utilities;
 
 :root {
+  /* Brand */
   --brand-navy: #0f172a;
   --brand-accent: #059669;
+  --brand-accent-hover: #047857;
+  --brand-accent-muted: #d1fae5;
+
+  /* Surfaces */
+  --surface-page: #f8fafc;
+  --surface-card: #ffffff;
+  --surface-muted: #f1f5f9;
+  --surface-header: #f8fafc;
+
+  /* Borders */
+  --border-default: #e2e8f0;
+  --border-muted: #f1f5f9;
+
+  /* Text */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-inverse: #ffffff;
+
+  /* Semantic */
+  --color-success: #059669;
+  --color-success-bg: #ecfdf5;
+  --color-warning: #d97706;
+  --color-warning-bg: #fffbeb;
+  --color-error: #dc2626;
+  --color-error-bg: #fef2f2;
+  --color-info: #2563eb;
+  --color-info-bg: #eff6ff;
+
+  /* Radii */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.06);
+  --shadow-header: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+
+  /* Focus */
+  --ring-color: #10b981;
+  --ring-offset: 2px;
 }
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply bg-surface-page text-text-primary antialiased;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(5, 150, 105, 0.08), transparent),
+      radial-gradient(ellipse 60% 40% at 100% 0%, rgba(15, 23, 42, 0.04), transparent);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    @apply bg-emerald-200 text-emerald-950;
+  }
+}
+
+@layer components {
+  .panel-header {
+    @apply border-b border-border-muted px-4 py-2.5;
+    background-color: rgb(248 250 252 / 0.8);
+  }
+
+  .panel-header-title {
+    @apply text-xs font-semibold uppercase tracking-wide text-text-secondary;
+  }
+
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(203 213 225) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-slate-300;
+  }
+
+  .sticky-col-shadow {
+    box-shadow: 4px 0 6px -2px rgb(15 23 42 / 0.06);
   }
 }

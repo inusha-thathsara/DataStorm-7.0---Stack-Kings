@@ -41,6 +41,7 @@ ROUND2_STEPS: list[tuple[str, str]] = [
     ("LKR 5M optimizer", "phase4_optimize.py"),
     ("Submission CSVs", "phase5_submit.py"),
     ("Export app data", "phase6_export_app_data.py"),
+    ("Load Postgres (optional)", "phase6b_load_postgres.py"),
 ]
 
 QA_STEPS: list[tuple[str, str]] = [

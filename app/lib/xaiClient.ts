@@ -32,14 +32,14 @@ function clientOllamaConfig() {
   return { enabled: true, base, model, timeoutMs, numGpu };
 }
 
-function ollamaFailureMessage(err: unknown): string {
+function ollamaFailureMessage(err: unknown, model: string): string {
   if (err instanceof DOMException && err.name === "AbortError") {
-    return "Ollama timed out — increase NEXT_PUBLIC_OLLAMA_TIMEOUT_MS (gemma4:e4b often needs 60–120s).";
+    return `Ollama timed out — increase NEXT_PUBLIC_OLLAMA_TIMEOUT_MS (${model} may need 30–120s).`;
   }
   const msg = err instanceof Error ? err.message : String(err);
   if (/failed to fetch|networkerror|cors/i.test(msg)) {
     return (
-      "Browser cannot reach Ollama. Start Ollama (ollama serve), pull the model (ollama pull gemma4:e4b), " +
+      `Browser cannot reach Ollama. Start Ollama (ollama serve), pull the model (ollama pull ${model}), ` +
       "and set CORS: OLLAMA_ORIGINS=http://localhost:3000 then restart Ollama."
     );
   }
@@ -92,8 +92,8 @@ export async function fetchBrowserOllamaExplanation(
     if (!verified) {
       return {
         error:
-          "Ollama returned no generated tokens (eval_count=0 or empty content). " +
-          "Check think:false and that gemma4:e4b is pulled.",
+          `Ollama returned no generated tokens (eval_count=0 or empty content). ` +
+          `Check think:false and that ${model} is pulled.`,
       };
     }
     if (isTemplateExplanation(outlet, verified.text)) {
@@ -102,7 +102,7 @@ export async function fetchBrowserOllamaExplanation(
 
     return { result: verified, clientDurationMs: Date.now() - started };
   } catch (err) {
-    return { error: ollamaFailureMessage(err) };
+    return { error: ollamaFailureMessage(err, model) };
   } finally {
     clearTimeout(timer);
   }
