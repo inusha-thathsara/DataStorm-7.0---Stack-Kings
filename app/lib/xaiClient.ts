@@ -20,9 +20,9 @@ export type ExplainResult = {
 };
 
 function clientOllamaConfig() {
-  const enabled = process.env.NEXT_PUBLIC_OLLAMA_ENABLED;
-  if (enabled === "false") {
-    return { enabled: false, base: "", model: "", timeoutMs: 0 };
+  const enabled = process.env.NEXT_PUBLIC_OLLAMA_ENABLED === "true";
+  if (!enabled) {
+    return { enabled: false, base: "", model: "", timeoutMs: 0, numGpu: 0 };
   }
   const base = (process.env.NEXT_PUBLIC_OLLAMA_BASE_URL || DEFAULT_OLLAMA_BASE).replace(/\/$/, "");
   const model = process.env.NEXT_PUBLIC_OLLAMA_MODEL || DEFAULT_OLLAMA_MODEL;
@@ -30,6 +30,10 @@ function clientOllamaConfig() {
     Number(process.env.NEXT_PUBLIC_OLLAMA_TIMEOUT_MS) || DEFAULT_OLLAMA_TIMEOUT_MS;
   const numGpu = resolveOllamaNumGpu(process.env.NEXT_PUBLIC_OLLAMA_NUM_GPU);
   return { enabled: true, base, model, timeoutMs, numGpu };
+}
+
+export function isClientOllamaEnabled(): boolean {
+  return clientOllamaConfig().enabled;
 }
 
 function ollamaFailureMessage(err: unknown, model: string): string {
@@ -130,29 +134,49 @@ async function fetchServerFallback(
 }
 
 /**
- * Browser-first XAI: Ollama on the client → server Gemini → template.
+ * Browser XAI: optional local Ollama when enabled → server Gemini → template.
+ * When NEXT_PUBLIC_OLLAMA_ENABLED is not "true", skips Ollama entirely (cloud deploy).
  */
 export async function resolveExplanation(outlet: Outlet): Promise<ExplainResult> {
-  const ollamaAttempt = await fetchBrowserOllamaExplanation(outlet);
-  if ("result" in ollamaAttempt) {
-    return {
-      explanation: ollamaAttempt.result.text,
-      source: "ollama",
-      meta: ollamaAttempt.result.meta,
-    };
+  if (isClientOllamaEnabled()) {
+    const ollamaAttempt = await fetchBrowserOllamaExplanation(outlet);
+    if ("result" in ollamaAttempt) {
+      return {
+        explanation: ollamaAttempt.result.text,
+        source: "ollama",
+        meta: ollamaAttempt.result.meta,
+      };
+    }
+
+    const ollamaError = ollamaAttempt.error;
+    try {
+      const fallback = await fetchServerFallback(outlet);
+      return {
+        explanation: fallback.explanation,
+        source: fallback.source,
+        meta: fallback.meta,
+        warning:
+          fallback.warning ??
+          (fallback.source === "template"
+            ? `Ollama unavailable (${ollamaError}). Used deterministic template.`
+            : `Ollama unavailable (${ollamaError}). Used ${fallback.source} fallback.`),
+      };
+    } catch (err) {
+      return {
+        explanation: "",
+        source: "template",
+        error: err instanceof Error ? err.message : "Explain request failed",
+      };
+    }
   }
 
-  const ollamaError = ollamaAttempt.error;
   try {
     const fallback = await fetchServerFallback(outlet);
     return {
       explanation: fallback.explanation,
       source: fallback.source,
       meta: fallback.meta,
-      warning:
-        fallback.source === "template"
-          ? `Ollama unavailable (${ollamaError}). Used deterministic template.`
-          : `Ollama unavailable (${ollamaError}). Used ${fallback.source} fallback.`,
+      warning: fallback.warning,
     };
   } catch (err) {
     return {

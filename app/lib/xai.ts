@@ -169,7 +169,9 @@ export async function resolveHybridExplanation(
     explanation: buildTemplateExplanation(outlet),
     source: "template",
     warning: options?.skipOllama
-      ? "Used deterministic template (client Ollama skipped or unavailable)."
+      ? apiKey
+        ? "Gemini did not return a usable explanation. Used deterministic template."
+        : "No cloud LLM configured. Used deterministic template."
       : "Used deterministic template (Ollama and Gemini unavailable).",
   };
 }
