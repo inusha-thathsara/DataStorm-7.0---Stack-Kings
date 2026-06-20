@@ -744,7 +744,7 @@ if xai_lib.exists():
     xai_src = xai_lib.read_text(encoding="utf-8")
     check("xai.ts: resolveHybridExplanation", "resolveHybridExplanation" in xai_src)
     check("xai.ts: Ollama before Gemini", xai_src.find("fetchOllamaExplanation") < xai_src.find("fetchGeminiExplanation"))
-    check("xai.ts: default gemma4:e2b", "gemma4:e2b" in xai_src)
+    check("xai.ts: default gemma3:1b", "gemma3:1b" in xai_src)
     check("xai.ts: template fallback", "buildTemplateExplanation" in xai_src)
 check("app/components/OutletMap.tsx exists", (ROOT/"app"/"components"/"OutletMap.tsx").exists())
 

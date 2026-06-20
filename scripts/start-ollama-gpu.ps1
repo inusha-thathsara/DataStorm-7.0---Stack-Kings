@@ -2,7 +2,7 @@
 # Usage (from repo root): .\scripts\start-ollama-gpu.ps1
 #
 # Requires: NVIDIA GPU drivers + Ollama installed (https://ollama.com)
-# gemma4:e4b needs ~10 GB VRAM for full GPU offload — check with: ollama ps
+# gemma3:1b is small (~1B) — fast on CPU or GPU; check with: ollama ps
 
 $ErrorActionPreference = "Stop"
 
@@ -18,7 +18,7 @@ Write-Host "  OLLAMA_NUM_GPU_LAYERS=$($env:OLLAMA_NUM_GPU_LAYERS)"
 Write-Host "  OLLAMA_FLASH_ATTENTION=$($env:OLLAMA_FLASH_ATTENTION)"
 Write-Host ""
 Write-Host "After serve starts, verify GPU offload: ollama ps"
-Write-Host "  (expect high GPU%% when VRAM fits the model; gemma4:e4b ~9.6 GB)"
+Write-Host "  (gemma3:1b fits easily in VRAM; larger models need more GPU memory)"
 Write-Host ""
 
 ollama serve

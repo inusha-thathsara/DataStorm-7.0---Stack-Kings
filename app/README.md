@@ -36,7 +36,7 @@ Copy `.env.example` to `.env.local` and configure any combination.
 ### Ollama setup (required for local LLM)
 
 ```bash
-ollama pull gemma4:e4b
+ollama pull gemma3:1b
 ```
 
 **GPU-first (recommended on Windows):** stop any running Ollama, then from the repo root:
@@ -53,13 +53,13 @@ Verify GPU usage while explaining an outlet:
 ollama ps
 ```
 
-You want a high **GPU** share in the `PROCESSOR` column (e.g. `20%/80% CPU/GPU` or `100% GPU`). `gemma4:e4b` is ~9.6 GB — if VRAM is smaller, Ollama splits layers across CPU/GPU. Use a smaller model (`gemma4:e2b`) or free VRAM if GPU stays low.
+You want a high **GPU** share in the `PROCESSOR` column (e.g. `20%/80% CPU/GPU` or `100% GPU`). Default model `gemma3:1b` is small (~1B params) and should fit easily in VRAM; use a larger model only if you need richer prose.
 
 | Variable | Purpose |
 |----------|---------|
 | `NEXT_PUBLIC_OLLAMA_ENABLED=true` | Browser calls Ollama at `NEXT_PUBLIC_OLLAMA_BASE_URL` |
-| `NEXT_PUBLIC_OLLAMA_MODEL` | Model tag (default `gemma4:e4b`) |
-| `NEXT_PUBLIC_OLLAMA_TIMEOUT_MS` | Default **120000** — gemma4:e4b often needs 60–120s |
+| `NEXT_PUBLIC_OLLAMA_MODEL` | Model tag (default `gemma3:1b`) |
+| `NEXT_PUBLIC_OLLAMA_TIMEOUT_MS` | Default **120000** — gemma3:1b is usually fast; increase if SWOT output truncates |
 | `NEXT_PUBLIC_OLLAMA_NUM_GPU` | Default **999** — max GPU layer offload (`0` = CPU-only) |
 | `GEMINI_API_KEY` | Server fallback via Gemini 2.0 Flash |
 
@@ -83,9 +83,9 @@ Hard refresh the browser (Ctrl+Shift+R) if needed.
 ### Troubleshooting XAI (template fallback only)
 
 1. **Restart the server** after editing `.env.local` (`Ctrl+C`, then `npm run dev:clean` or rebuild + `npm run start`).
-2. **Ollama + `gemma4:e4b`:** browser calls `http://127.0.0.1:11434/api/chat` with `think: false`. Set `OLLAMA_ORIGINS=http://localhost:3000` and restart Ollama if the browser cannot reach it (CORS). Badge shows **token count + duration** as proof of inference. GPU may stay low if Ollama runs mostly on CPU — check `ollama ps`. Default timeout is **120s** — local `gemma4:e4b` often needs 45–90s on first request (model load). Increase `OLLAMA_TIMEOUT_MS` if you still see template fallback.
+2. **Ollama + `gemma3:1b`:** browser calls `http://127.0.0.1:11434/api/chat` with `think: false`. Set `OLLAMA_ORIGINS=http://localhost:3000` and restart Ollama if the browser cannot reach it (CORS). Badge shows **token count + duration** as proof of inference. Default timeout is **120s**. Increase `OLLAMA_TIMEOUT_MS` if you still see template fallback.
 3. **Gemini:** default model is `gemini-2.5-flash` (override via `GEMINI_MODEL`). Use an [AI Studio](https://aistudio.google.com/apikey) API key. HTTP **429** = quota/rate limit — wait and retry.
-4. Confirm Ollama: `ollama list` shows `gemma4:e4b`, and `ollama serve` is running.
+4. Confirm Ollama: `ollama list` shows `gemma3:1b`, and `ollama serve` is running.
 
 Validate template factuality:
 

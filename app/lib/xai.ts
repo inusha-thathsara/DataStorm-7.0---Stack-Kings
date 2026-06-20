@@ -88,7 +88,7 @@ function geminiApiKey(): string | null {
 function buildGeminiGenerationConfig(model: string): Record<string, unknown> {
   const config: Record<string, unknown> = {
     temperature: 0.2,
-    maxOutputTokens: 1024,
+    maxOutputTokens: 1536,
   };
   // Gemini 2.5 counts internal thinking tokens against maxOutputTokens by default.
   // Disable thinking so the full budget is used for the visible explanation.
@@ -98,15 +98,42 @@ function buildGeminiGenerationConfig(model: string): Record<string, unknown> {
   return config;
 }
 
-function parseGeminiResponseText(data: unknown): string | null {
-  const parts = (data as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] })
-    ?.candidates?.[0]?.content?.parts;
-  if (!parts?.length) return null;
-  const text = parts
-    .filter((p) => p.text && !p.thought)
-    .map((p) => p.text!)
-    .join("")
+function normalizeGeminiText(text: string): string {
+  return text
+    .trim()
+    .replace(/^```(?:markdown|text)?\s*\n?/i, "")
+    .replace(/\n?```\s*$/i, "")
     .trim();
+}
+
+function parseGeminiResponseText(data: unknown): string | null {
+  const row = data as {
+    candidates?: {
+      content?: { parts?: { text?: string; thought?: boolean }[] };
+      finishReason?: string;
+    }[];
+    promptFeedback?: { blockReason?: string };
+  };
+
+  if (row.promptFeedback?.blockReason) {
+    console.warn(`[xai/gemini] blocked: ${row.promptFeedback.blockReason}`);
+    return null;
+  }
+
+  const candidate = row.candidates?.[0];
+  const parts = candidate?.content?.parts;
+  if (!parts?.length) {
+    const reason = candidate?.finishReason ?? "no candidates";
+    console.warn(`[xai/gemini] empty response (${reason})`);
+    return null;
+  }
+
+  const text = normalizeGeminiText(
+    parts
+      .filter((p) => p.text && !p.thought)
+      .map((p) => p.text!)
+      .join("")
+  );
   return text || null;
 }
 
@@ -160,16 +187,21 @@ export async function resolveHybridExplanation(
   const apiKey = geminiApiKey();
   if (apiKey) {
     const geminiText = await fetchGeminiExplanation(outlet, apiKey);
-    if (geminiText && !isTemplateExplanation(outlet, geminiText)) {
-      return { explanation: geminiText, source: "gemini" };
+    if (geminiText) {
+      if (isTemplateExplanation(outlet, geminiText)) {
+        console.warn("[xai/gemini] response matched deterministic template exactly");
+      } else {
+        return { explanation: geminiText, source: "gemini" };
+      }
     }
   }
 
+  const geminiConfigured = Boolean(apiKey);
   return {
     explanation: buildTemplateExplanation(outlet),
     source: "template",
     warning: options?.skipOllama
-      ? apiKey
+      ? geminiConfigured
         ? "Gemini did not return a usable explanation. Used deterministic template."
         : "No cloud LLM configured. Used deterministic template."
       : "Used deterministic template (Ollama and Gemini unavailable).",

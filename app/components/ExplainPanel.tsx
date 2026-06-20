@@ -1,3 +1,4 @@
+import { ExplainContent } from "@/components/ExplainContent";
 import { Badge, explainSourceTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
@@ -32,7 +33,7 @@ export function ExplainPanel({
             Explainable AI
           </PanelHeaderTitle>
           <p className="mt-0.5 text-xs text-text-muted">
-            Narrates pipeline numbers only — never generates predictions
+            SWOT analysis and highlighted business summary from pipeline data only
           </p>
         </div>
         <Button
@@ -42,7 +43,7 @@ export function ExplainPanel({
           disabled={loading}
           className="min-w-[200px] shadow-sm shadow-emerald-900/10"
         >
-          {loading ? "Generating explanation…" : "Explain this outlet"}
+          {loading ? "Generating SWOT & summary…" : "Explain this outlet"}
         </Button>
       </PanelHeader>
 
@@ -54,7 +55,7 @@ export function ExplainPanel({
         {explanation && (
           <Card className="border-border/80 shadow-card">
             <CardHeader className="flex flex-row flex-wrap items-center gap-2 border-b border-border-muted pb-3">
-              <CardTitle className="mb-0 text-sm">Business explanation</CardTitle>
+              <CardTitle className="mb-0 text-sm">Outlet intelligence</CardTitle>
               <Badge tone={explainSourceTone(source)}>{explainSourceLabel(source)}</Badge>
               {source === "ollama" && meta && (
                 <span className="text-xs text-text-muted">{formatExplainMeta(meta)}</span>
@@ -63,13 +64,7 @@ export function ExplainPanel({
                 <span className="text-xs text-text-muted">Deterministic fallback</span>
               )}
             </CardHeader>
-            <div className="space-y-3 pt-1">
-              {explanation.split(/\n\n+/).map((para, i) => (
-                <p key={i} className="text-sm leading-relaxed text-text-secondary">
-                  {para.trim()}
-                </p>
-              ))}
-            </div>
+            <ExplainContent explanation={explanation} />
           </Card>
         )}
       </div>

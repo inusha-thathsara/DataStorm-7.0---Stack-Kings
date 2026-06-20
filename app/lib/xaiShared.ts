@@ -1,7 +1,12 @@
-import type { ExplainMeta, ModelDrivers, Outlet, QrFeatureDriver } from "./types";
+import type { ExplainMeta, ModelDrivers, Outlet } from "./types";
+import {
+  buildSwotFromOutlet,
+  formatSwotText,
+  topQrDrivers,
+} from "./explainFormat";
 
 export const DEFAULT_OLLAMA_BASE = "http://127.0.0.1:11434";
-export const DEFAULT_OLLAMA_MODEL = "gemma4:e2b";
+export const DEFAULT_OLLAMA_MODEL = "gemma3:1b";
 export const DEFAULT_OLLAMA_TIMEOUT_MS = 120_000;
 /** Request max GPU layer offload (Ollama caps at VRAM). 0 = CPU-only — never use for XAI. */
 export const DEFAULT_OLLAMA_NUM_GPU = 999;
@@ -39,21 +44,25 @@ export function buildXaiPayload(outlet: Outlet): Record<string, unknown> {
     predictedIncrementalLiters: outlet.predictedIncrementalLiters,
     modelDrivers: md ?? null,
     instructions: [
-      "Write exactly 3 short business paragraphs.",
-      "Paragraph 1: predicted score vs historical max and gap.",
-      "Paragraph 2: cite modelDrivers.qrTopDrivers (feature weights/contributions) and kmeansPeerSignal — which factors increased the ceiling.",
-      "Paragraph 3: cite modelDrivers.competition (saturation penalty, isolation boost), local saturation, and trade spend if present.",
-      "Use ONLY numbers and labels from this JSON. Do not invent attributes.",
+      "Respond in TWO sections with these exact headings: SWOT ANALYSIS, then BUSINESS SUMMARY.",
+      "Start immediately with the line SWOT ANALYSIS — no introduction, preamble, or meta-commentary.",
+      "Under SWOT ANALYSIS include Strengths, Weaknesses, Opportunities, Threats — each with 2–4 bullet lines starting with '-'.",
+      "Use ONLY facts from this JSON. Ground SWOT in gapLiters, modelDrivers.qrTopDrivers, competition, saturation, tradeSpendLkr, seasonality.",
+      "Under BUSINESS SUMMARY write 2 short paragraphs of outlet narrative only — no filler phrases like 'here is' or 'based on the JSON'.",
+      "Wrap the most important numbers and terms in **double asterisks** for highlighting (e.g. **914.7 L**, **high saturation**).",
+      "Do not invent numbers, metrics, or outlet attributes.",
     ].join(" "),
   };
 }
 
 export function buildXaiPrompt(outlet: Outlet): string {
   return (
-    "Explain this FMCG outlet prediction in 3 short business paragraphs. " +
+    "Analyze this FMCG outlet and produce a SWOT analysis plus a highlighted business summary. " +
     "Use ONLY the facts in the JSON below. Include feature importance from modelDrivers.qrTopDrivers " +
     "(weight and contributionLiters) and competition adjustment weights. " +
-    "Do not invent numbers, metrics, or outlet attributes.\n\n" +
+    "Do not add any introduction or preamble — begin with SWOT ANALYSIS on the first line. " +
+    "Format:\n\nSWOT ANALYSIS\nStrengths:\n- ...\nWeaknesses:\n- ...\nOpportunities:\n- ...\nThreats:\n- ...\n\n" +
+    "BUSINESS SUMMARY\n(2 paragraphs of narrative only; wrap key metrics in **double asterisks**)\n\n" +
     JSON.stringify(buildXaiPayload(outlet), null, 2)
   );
 }
@@ -81,13 +90,14 @@ export function buildOllamaChatBody(
         role: "system",
         content:
           "You are a FMCG analytics assistant. Explain predictions using only provided data. " +
-          "Write exactly 3 short paragraphs in plain business language.",
+          "No introduction or preamble. Start with SWOT ANALYSIS, then BUSINESS SUMMARY (2 paragraphs). " +
+          "Highlight key metrics with **double asterisks**.",
       },
       { role: "user", content: prompt },
     ],
     options: {
       temperature: 0.2,
-      num_predict: 512,
+      num_predict: 1024,
       /** Layers to place on GPU — high value forces GPU-first (Ollama trims to fit VRAM). */
       num_gpu: numGpu,
       main_gpu: 0,
@@ -128,105 +138,64 @@ export function parseVerifiedOllamaResponse(data: unknown): VerifiedOllamaResult
   };
 }
 
-/** Deterministic template always opens with this phrase — LLM outputs use different wording. */
-export function isTemplateExplanation(outlet: Outlet, text: string): boolean {
-  const trimmed = text.trim();
-  if (trimmed === buildTemplateExplanation(outlet).trim()) return true;
-  const templatePrefix = `Outlet ${outlet.id} has a predicted maximum monthly potential`;
-  return trimmed.startsWith(templatePrefix);
+function normalizeExplanationForCompare(text: string): string {
+  return text
+    .trim()
+    .replace(/\r\n/g, "\n")
+    .replace(/^```(?:markdown|text)?\s*\n?/i, "")
+    .replace(/\n?```\s*$/i, "")
+    .replace(/\n{3,}/g, "\n\n");
 }
 
-function formatQrDrivers(drivers: QrFeatureDriver[] | undefined): string {
-  if (!drivers?.length) return "";
-  return drivers
-    .map(
-      (d) =>
-        `${d.label} (weight ${d.weight}, contribution ${d.contributionLiters} L, ${d.direction})`
-    )
-    .join("; ");
+/** True only when text is byte-for-byte the deterministic fallback for this outlet. */
+export function isTemplateExplanation(outlet: Outlet, text: string): boolean {
+  return (
+    normalizeExplanationForCompare(text) ===
+    normalizeExplanationForCompare(buildTemplateExplanation(outlet))
+  );
 }
 
 export function buildTemplateExplanation(outlet: Outlet): string {
+  const swot = buildSwotFromOutlet(outlet);
   const uplift =
     outlet.ownMaxVol > 0
       ? ((outlet.predictedLiters / outlet.ownMaxVol - 1) * 100).toFixed(1)
       : "0";
 
-  const driversUp: string[] = [];
-  const driversDown: string[] = [];
-
-  if (outlet.gapLiters > 100) driversUp.push("significant untapped volume gap");
-  if (outlet.decayTransport > 2) driversUp.push("strong nearby transport footfall");
-  if (outlet.decayFood > 1) driversUp.push("food-service POI proximity");
-  if (outlet.coolerCount >= 3) driversUp.push("higher cooler capacity");
-  if (outlet.janFactor > 1.05) driversUp.push("favorable January seasonality");
-  if (outlet.seasonalityLabel === "Favorable") driversUp.push("distributor Favorable Jan 2026 label");
-  if ((outlet.seasonalityLabel ?? "") === "Un-Favorable") driversDown.push("Un-Favorable January seasonality label");
-
-  if (outlet.marketSaturation === "high")
-    driversDown.push("high local competitor density");
-  if (outlet.adjustmentFactor < 0.95)
-    driversDown.push("competitive catchment penalty applied");
-  if (outlet.coolerCount === 0) driversDown.push("no on-premise cooler");
-
-  const clusterNote =
-    outlet.clusterCeiling > 0
-      ? ` Peer cluster ${outlet.clusterId || "n/a"} ceiling is ${outlet.clusterCeiling.toFixed(1)} L.`
-      : "";
+  const md: ModelDrivers | undefined = outlet.modelDrivers;
+  const comp = md?.competition;
+  const qrNote = topQrDrivers(md?.qrTopDrivers, 3);
 
   const para1 =
-    `Outlet ${outlet.id} has a predicted maximum monthly potential of ${outlet.predictedLiters.toFixed(1)} liters ` +
-    `(~${uplift}% above its historical maximum of ${outlet.ownMaxVol.toFixed(1)} L). ` +
-    `The model ensemble (${outlet.dominantMethod}) estimates a latent gap of ${outlet.gapLiters.toFixed(1)} liters ` +
-    `(recent 3-month average: ${(outlet.recent3mAvg ?? 0).toFixed(1)} L).${clusterNote}`;
+    `Outlet **${outlet.id}** (${outlet.province}, ${outlet.distributorId}) has a predicted January 2026 potential of **${outlet.predictedLiters.toFixed(1)} L** ` +
+    `(~**${uplift}%** above its historical maximum of **${outlet.ownMaxVol.toFixed(1)} L**). ` +
+    `The **${outlet.dominantMethod}** ensemble estimates a latent gap of **${outlet.gapLiters.toFixed(1)} L** ` +
+    `(recent 3-month average: **${(outlet.recent3mAvg ?? 0).toFixed(1)} L**).`;
 
-  const md: ModelDrivers | undefined = outlet.modelDrivers;
-  const qrDrivers = md?.qrTopDrivers ?? [];
-  const comp = md?.competition;
-  const qrDriverText = formatQrDrivers(qrDrivers);
-
-  let para2 = "";
-  if (md) {
-    para2 =
-      `Model traceability: ${md.winningCeilingMethod === "quantile_reg" ? "Quantile regression" : "K-Means peer ceiling"} ` +
-      `set the base ceiling (${md.baseEnsembleLiters.toFixed(1)} L). ${md.kmeansPeerSignal}.`;
-    if (qrDriverText) {
-      para2 += ` Top QR feature drivers (τ=0.90 weights): ${qrDriverText}.`;
-    }
-  }
-  if (driversUp.length > 0) {
-    para2 += ` Local signals supporting uplift: ${driversUp.join(", ")}.`;
-  }
-  if (!para2) {
-    para2 =
-      driversUp.length > 0
-        ? `Factors supporting higher potential: ${driversUp.join(", ")}.`
-        : "No strong positive local drivers were detected beyond peer-cluster benchmarking.";
-  }
-
-  let compNote = "";
+  let para2 =
+    `Market saturation is **${outlet.marketSaturation || "unknown"}** with competitor density **${outlet.competitorDensity.toFixed(2)}**. `;
   if (comp) {
-    compNote =
-      `Competition adjustment: saturation penalty ×${comp.saturationPenalty.toFixed(3)}, ` +
-      `isolation boost ×${comp.isolationBoost.toFixed(3)} ` +
-      `(combined ×${comp.combinedAdjustmentFactor.toFixed(3)}). `;
+    para2 +=
+      `Competition adjustment: penalty ×**${comp.saturationPenalty.toFixed(3)}**, boost ×**${comp.isolationBoost.toFixed(3)}** ` +
+      `(combined ×**${comp.combinedAdjustmentFactor.toFixed(3)}**). `;
+  }
+  if (qrNote) {
+    para2 += `Top model drivers: **${qrNote}**. `;
+  }
+  if (md?.kmeansPeerSignal) {
+    para2 += `${md.kmeansPeerSignal} `;
+  }
+  if (outlet.tradeSpendLkr > 0) {
+    para2 +=
+      `Recommended Western trade spend: **LKR ${outlet.tradeSpendLkr.toLocaleString()}**` +
+      (outlet.predictedIncrementalLiters > 0
+        ? ` (modeled incremental **+${outlet.predictedIncrementalLiters.toFixed(1)} L**).`
+        : ".");
+  } else {
+    para2 += "No Western Province trade spend allocated for this outlet.";
   }
 
-  const para3 =
-    compNote +
-    (driversDown.length > 0
-      ? `Factors moderating the score: ${driversDown.join(", ")}. `
-      : "") +
-    `Market saturation is ${outlet.marketSaturation || "unknown"} ` +
-    `(competitor density index: ${outlet.competitorDensity.toFixed(2)}). ` +
-    (outlet.tradeSpendLkr > 0
-      ? `Recommended Western Province trade spend: LKR ${outlet.tradeSpendLkr.toLocaleString()}` +
-        ((outlet.predictedIncrementalLiters ?? 0) > 0
-          ? ` (modeled incremental volume: ${outlet.predictedIncrementalLiters!.toFixed(1)} L).`
-          : ".")
-      : "No trade spend allocated (outside Western Province budget scope or zero gap).");
-
-  return [para1, para2, para3].join("\n\n");
+  return `${formatSwotText(swot)}\n\nBUSINESS SUMMARY\n\n${para1}\n\n${para2}`;
 }
 
 export function formatExplainMeta(meta: ExplainMeta): string {
