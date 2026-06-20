@@ -59,7 +59,7 @@ export type OutletAccessResult =
   | { kind: "forbidden" };
 
 async function resolveSession(session?: AppSession): Promise<AppSession> {
-  return session ?? (await getSession()) ?? { userId: "dev", role: "national" };
+  return session ?? (await getSession());
 }
 
 function filterJsonOutlets(outlets: Outlet[], params: OutletListParams, session: AppSession): Outlet[] {

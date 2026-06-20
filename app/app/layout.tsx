@@ -1,11 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
 import { Inter } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
-import { AuthControls } from "@/components/AuthControls";
 import { DataAsOf } from "@/components/DataAsOf";
-import { isAuthBypassed } from "@/lib/auth/config";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,7 +22,7 @@ export const viewport: Viewport = {
   themeColor: "#0f172a",
 };
 
-function AppShell({ children, authBypassed }: { children: React.ReactNode; authBypassed: boolean }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className={`${inter.className} min-h-screen flex flex-col`}>
@@ -60,7 +57,6 @@ function AppShell({ children, authBypassed }: { children: React.ReactNode; authB
               <span className="hidden rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-300 sm:inline">
                 Data Storm 7.0
               </span>
-              <AuthControls authBypassed={authBypassed} />
             </nav>
           </div>
         </header>
@@ -83,19 +79,5 @@ function AppShell({ children, authBypassed }: { children: React.ReactNode; authB
         </footer>
       </body>
     </html>
-  );
-}
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const authBypassed = isAuthBypassed();
-
-  if (authBypassed) {
-    return <AppShell authBypassed>{children}</AppShell>;
-  }
-
-  return (
-    <ClerkProvider>
-      <AppShell authBypassed={false}>{children}</AppShell>
-    </ClerkProvider>
   );
 }

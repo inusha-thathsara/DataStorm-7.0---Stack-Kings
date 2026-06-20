@@ -12,11 +12,7 @@ export class ApiHttpError extends Error {
 }
 
 export async function requireSession(): Promise<AppSession> {
-  const session = await getSession();
-  if (!session) {
-    throw new ApiHttpError(401, "Unauthorized");
-  }
-  return session;
+  return getSession();
 }
 
 export function handleApiError(err: unknown): NextResponse {

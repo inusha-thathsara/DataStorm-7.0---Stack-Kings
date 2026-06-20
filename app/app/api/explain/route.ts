@@ -46,9 +46,6 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ explanation, source, meta, warning });
   } catch (err) {
-    if (err instanceof Error && err.message === "Unauthorized") {
-      return handleApiError(err);
-    }
     console.error("[/api/explain]", err);
     return NextResponse.json({
       explanation: buildTemplateExplanation({ id: outletId } as never),

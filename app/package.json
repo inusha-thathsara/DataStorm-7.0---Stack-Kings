@@ -12,7 +12,6 @@
     "verify": "npm run build:clean"
   },
   "dependencies": {
-    "@clerk/nextjs": "^5.7.6",
     "@neondatabase/serverless": "^1.1.0",
     "clsx": "^2.1.1",
     "leaflet": "^1.9.4",

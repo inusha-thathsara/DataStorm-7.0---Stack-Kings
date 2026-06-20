@@ -1,10 +1,4 @@
-/**
- * RBAC — Clerk roles enforced server-side on all outlet/explain APIs.
- *
- * Assign roles in Clerk Dashboard → User → Public metadata:
- *   { "role": "western" }
- *   { "role": "distributor", "distributorId": "DIST_001" }
- */
+/** Scope helpers for outlet/explain APIs (default session is national / full access). */
 import type { Outlet } from "@/lib/types";
 
 export type UserRole = "admin" | "national" | "western" | "distributor";
@@ -29,11 +23,6 @@ export type UserScope = {
   lockProvinceFilter: boolean;
   hideWesternScopeToggle: boolean;
 };
-
-/** @deprecated use getSession() from session.ts */
-export function getSessionStub(): AppSession {
-  return { userId: "dev", role: "national" };
-}
 
 export function applyScopeFilter(session: AppSession, query: ScopeFilter): ScopeFilter {
   const scoped: ScopeFilter = { ...query };
