@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { ExplainPanel } from "@/components/ExplainPanel";
+import { FeatureImportanceChart } from "@/components/outlet/FeatureImportanceChart";
+import { PotentialVolumeChart } from "@/components/outlet/PotentialVolumeChart";
 import { Badge } from "@/components/ui/Badge";
 import { Alert } from "@/components/ui/Alert";
 import { Card, CardTitle, PanelHeader, PanelHeaderTitle } from "@/components/ui/Card";
@@ -186,16 +188,15 @@ export default function OutletPage({ params }: { params: { id: string } }) {
               Predicted potential
             </PanelHeaderTitle>
           </PanelHeader>
-          <div className="mt-3 space-y-2">
-            <p className="text-2xl font-bold text-brand-accent">
-              {num(outlet.predictedLiters)} L
-              <span className="ml-1 text-sm font-normal text-text-muted">/ month (Jan 2026)</span>
-            </p>
-            <MetricRow label="Historical max" value={`${num(outlet.ownMaxVol)} L`} />
-            <MetricRow label="Recent 3m avg" value={`${num(outlet.recent3mAvg)} L`} />
-            <MetricRow label="Gap" value={`${num(outlet.gapLiters)} L`} />
-            <MetricRow label="Jan factor" value={num(outlet.janFactor, 3)} />
-            <MetricRow label="Seasonality" value={outlet.seasonalityLabel || "—"} />
+          <div className="mt-3">
+            <PotentialVolumeChart
+              predictedLiters={outlet.predictedLiters}
+              ownMaxVol={outlet.ownMaxVol}
+              recent3mAvg={outlet.recent3mAvg}
+              gapLiters={outlet.gapLiters}
+              janFactor={outlet.janFactor}
+              seasonalityLabel={outlet.seasonalityLabel}
+            />
           </div>
         </Card>
 
@@ -228,42 +229,16 @@ export default function OutletPage({ params }: { params: { id: string } }) {
           </div>
         </Card>
 
-        {outlet.modelDrivers?.qrTopDrivers && outlet.modelDrivers.qrTopDrivers.length > 0 && (
-          <Card className="shadow-card">
-            <PanelHeader className="mb-0 border-0 bg-transparent px-0 py-0">
-              <PanelHeaderTitle className="normal-case tracking-normal text-base text-text-primary">
-                Feature importance (QR τ=0.90)
-              </PanelHeaderTitle>
-            </PanelHeader>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs font-semibold uppercase text-text-muted">
-                    <th className="pb-2 pr-2">Driver</th>
-                    <th className="pb-2 pr-2">Weight</th>
-                    <th className="pb-2">Contrib. (L)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {outlet.modelDrivers.qrTopDrivers.map((d) => (
-                    <tr key={d.feature} className="border-b border-border-muted">
-                      <td className="py-2 pr-2 text-text-primary">{d.label}</td>
-                      <td className="py-2 pr-2 tabular-nums text-text-secondary">{d.weight.toFixed(4)}</td>
-                      <td
-                        className={`py-2 tabular-nums font-medium ${
-                          d.direction === "up" ? "text-brand-accent" : "text-semantic-warning"
-                        }`}
-                      >
-                        {d.contributionLiters > 0 ? "+" : ""}
-                        {d.contributionLiters.toFixed(1)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        )}
+        <Card className="shadow-card md:col-span-2">
+          <PanelHeader className="mb-0 border-0 bg-transparent px-0 py-0">
+            <PanelHeaderTitle className="normal-case tracking-normal text-base text-text-primary">
+              Feature importance (QR τ=0.90)
+            </PanelHeaderTitle>
+          </PanelHeader>
+          <div className="mt-3">
+            <FeatureImportanceChart drivers={outlet.modelDrivers?.qrTopDrivers ?? []} />
+          </div>
+        </Card>
 
         <Card className="shadow-card">
           <PanelHeader className="mb-0 border-0 bg-transparent px-0 py-0">
