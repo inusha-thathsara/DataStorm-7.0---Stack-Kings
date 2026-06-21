@@ -1,13 +1,22 @@
 import type { ExplainSource, Outlet } from "./types";
+import type { ExplainErrorCode } from "./explainErrors";
+import { explainErrorMessage, mapGeminiHttpStatus } from "./explainErrors";
+import {
+  EXPLAIN_JSON_SCHEMA,
+  parseExplainInput,
+  stableStringifyExplanation,
+  type StructuredExplanation,
+} from "./explainSchema";
 import {
   DEFAULT_OLLAMA_BASE,
   DEFAULT_OLLAMA_MODEL,
   DEFAULT_OLLAMA_TIMEOUT_MS,
   buildOllamaChatBody,
-  buildTemplateExplanation,
-  buildXaiPayload,
+  buildTemplateJson,
+  buildTemplateStructured,
   buildXaiPrompt,
   isTemplateExplanation,
+  normalizeLlmExplanation,
   parseVerifiedOllamaResponse,
   resolveOllamaNumGpu,
   type ExplainMeta,
@@ -15,12 +24,28 @@ import {
 
 export {
   buildTemplateExplanation,
+  buildTemplateJson,
+  buildTemplateStructured,
   buildXaiPayload,
   buildXaiPrompt,
   formatExplainMeta,
 } from "./xaiShared";
 
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+
+export type ExplainResolution = {
+  payload: StructuredExplanation;
+  explanation: string;
+  source: ExplainSource;
+  meta?: ExplainMeta;
+  warning?: string;
+  errorCode?: ExplainErrorCode;
+  cached?: boolean;
+};
+
+function payloadToWire(payload: StructuredExplanation): string {
+  return stableStringifyExplanation(payload);
+}
 
 export function isOllamaEnabled(): boolean {
   if (process.env.OLLAMA_ENABLED === "false") return false;
@@ -38,7 +63,7 @@ function ollamaConfig() {
 
 export async function fetchOllamaExplanation(
   outlet: Outlet
-): Promise<{ text: string; meta: ExplainMeta } | null> {
+): Promise<{ payload: StructuredExplanation; meta: ExplainMeta } | { errorCode: ExplainErrorCode } | null> {
   if (!isOllamaEnabled()) return null;
 
   const { base, model, timeoutMs, numGpu } = ollamaConfig();
@@ -55,25 +80,28 @@ export async function fetchOllamaExplanation(
       body: JSON.stringify(buildOllamaChatBody(model, prompt, numGpu)),
     });
     if (!res.ok) {
-      const errBody = await res.text().catch(() => "");
-      console.warn(`[xai/ollama] HTTP ${res.status}: ${errBody.slice(0, 200)}`);
-      return null;
+      console.warn(`[xai/ollama] HTTP ${res.status}`);
+      return { errorCode: "OLLAMA_UNREACHABLE" };
     }
     const data = await res.json();
     const verified = parseVerifiedOllamaResponse(data);
     if (!verified) {
-      console.warn("[xai/ollama] unverified response (missing eval_count or content)");
-      return null;
+      console.warn("[xai/ollama] unverified response");
+      return { errorCode: "OLLAMA_INVALID_JSON" };
     }
-    if (isTemplateExplanation(outlet, verified.text)) {
-      console.warn("[xai/ollama] output matched template — not labeling as Ollama");
-      return null;
+    const payload =
+      normalizeLlmExplanation(verified.text, outlet) ?? parseExplainInput(verified.text);
+    if (!payload) return { errorCode: "OLLAMA_INVALID_JSON" };
+    if (isTemplateExplanation(outlet, payload)) {
+      console.warn("[xai/ollama] output matched template");
+      return { errorCode: "OLLAMA_INVALID_JSON" };
     }
-    return { text: verified.text, meta: verified.meta };
+    return { payload, meta: verified.meta };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[xai/ollama] request failed: ${msg}`);
-    return null;
+    if (err instanceof Error && err.name === "AbortError") return { errorCode: "OLLAMA_TIMEOUT" };
+    return { errorCode: "OLLAMA_UNREACHABLE" };
   } finally {
     clearTimeout(timer);
   }
@@ -89,24 +117,20 @@ function buildGeminiGenerationConfig(model: string): Record<string, unknown> {
   const config: Record<string, unknown> = {
     temperature: 0.2,
     maxOutputTokens: 1536,
+    responseMimeType: "application/json",
+    responseSchema: EXPLAIN_JSON_SCHEMA,
   };
-  // Gemini 2.5 counts internal thinking tokens against maxOutputTokens by default.
-  // Disable thinking so the full budget is used for the visible explanation.
   if (/gemini-2\.5/i.test(model)) {
     config.thinkingConfig = { thinkingBudget: 0 };
   }
   return config;
 }
 
-function normalizeGeminiText(text: string): string {
-  return text
-    .trim()
-    .replace(/^```(?:markdown|text)?\s*\n?/i, "")
-    .replace(/\n?```\s*$/i, "")
-    .trim();
-}
+type GeminiResult =
+  | { ok: true; text: string }
+  | { ok: false; errorCode: ExplainErrorCode };
 
-function parseGeminiResponseText(data: unknown): string | null {
+function parseGeminiResponse(data: unknown): GeminiResult {
   const row = data as {
     candidates?: {
       content?: { parts?: { text?: string; thought?: boolean }[] };
@@ -117,30 +141,29 @@ function parseGeminiResponseText(data: unknown): string | null {
 
   if (row.promptFeedback?.blockReason) {
     console.warn(`[xai/gemini] blocked: ${row.promptFeedback.blockReason}`);
-    return null;
+    return { ok: false, errorCode: "GEMINI_BLOCKED" };
   }
 
   const candidate = row.candidates?.[0];
   const parts = candidate?.content?.parts;
   if (!parts?.length) {
-    const reason = candidate?.finishReason ?? "no candidates";
-    console.warn(`[xai/gemini] empty response (${reason})`);
-    return null;
+    console.warn(`[xai/gemini] empty response (${candidate?.finishReason ?? "no candidates"})`);
+    return { ok: false, errorCode: "GEMINI_EMPTY" };
   }
 
-  const text = normalizeGeminiText(
-    parts
-      .filter((p) => p.text && !p.thought)
-      .map((p) => p.text!)
-      .join("")
-  );
-  return text || null;
+  const text = parts
+    .filter((p) => p.text && !p.thought)
+    .map((p) => p.text!)
+    .join("")
+    .trim();
+  if (!text) return { ok: false, errorCode: "GEMINI_EMPTY" };
+  return { ok: true, text };
 }
 
 export async function fetchGeminiExplanation(
   outlet: Outlet,
   apiKey: string
-): Promise<string | null> {
+): Promise<{ payload: StructuredExplanation } | { errorCode: ExplainErrorCode }> {
   const prompt = buildXaiPrompt(outlet);
   const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
   try {
@@ -158,53 +181,70 @@ export async function fetchGeminiExplanation(
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
       console.warn(`[xai/gemini] HTTP ${res.status}: ${errBody.slice(0, 200)}`);
-      return null;
+      return { errorCode: mapGeminiHttpStatus(res.status) };
     }
     const data = await res.json();
-    return parseGeminiResponseText(data);
+    const parsed = parseGeminiResponse(data);
+    if (!parsed.ok) return { errorCode: parsed.errorCode };
+
+    const payload =
+      normalizeLlmExplanation(parsed.text, outlet) ?? parseExplainInput(parsed.text);
+    if (!payload) return { errorCode: "GEMINI_INVALID_JSON" };
+    if (isTemplateExplanation(outlet, payload)) {
+      return { errorCode: "GEMINI_INVALID_JSON" };
+    }
+    return { payload };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[xai/gemini] request failed: ${msg}`);
-    return null;
+    return { errorCode: "GEMINI_EMPTY" };
   }
 }
 
-/**
- * Server-side hybrid XAI (used when client Ollama is skipped): Ollama → Gemini → template.
- * Client should prefer resolveExplanation() in xaiClient.ts for browser-direct Ollama.
- */
 export async function resolveHybridExplanation(
   outlet: Outlet,
   options?: { skipOllama?: boolean }
-): Promise<{ explanation: string; source: ExplainSource; meta?: ExplainMeta; warning?: string }> {
+): Promise<ExplainResolution> {
+  const template = buildTemplateStructured(outlet);
+
   if (!options?.skipOllama) {
     const ollama = await fetchOllamaExplanation(outlet);
-    if (ollama) {
-      return { explanation: ollama.text, source: "ollama", meta: ollama.meta };
+    if (ollama && "payload" in ollama) {
+      return {
+        payload: ollama.payload,
+        explanation: payloadToWire(ollama.payload),
+        source: "ollama",
+        meta: ollama.meta,
+      };
     }
   }
 
   const apiKey = geminiApiKey();
-  if (apiKey) {
-    const geminiText = await fetchGeminiExplanation(outlet, apiKey);
-    if (geminiText) {
-      if (isTemplateExplanation(outlet, geminiText)) {
-        console.warn("[xai/gemini] response matched deterministic template exactly");
-      } else {
-        return { explanation: geminiText, source: "gemini" };
-      }
-    }
+  if (!apiKey) {
+    return {
+      payload: template,
+      explanation: buildTemplateJson(outlet),
+      source: "template",
+      errorCode: options?.skipOllama ? "NO_API_KEY" : undefined,
+      warning: explainErrorMessage("NO_API_KEY") + " Used deterministic pipeline template.",
+    };
   }
 
-  const geminiConfigured = Boolean(apiKey);
+  const gemini = await fetchGeminiExplanation(outlet, apiKey);
+  if ("payload" in gemini) {
+    return {
+      payload: gemini.payload,
+      explanation: payloadToWire(gemini.payload),
+      source: "gemini",
+    };
+  }
+
   return {
-    explanation: buildTemplateExplanation(outlet),
+    payload: template,
+    explanation: buildTemplateJson(outlet),
     source: "template",
-    warning: options?.skipOllama
-      ? geminiConfigured
-        ? "Gemini did not return a usable explanation. Used deterministic template."
-        : "No cloud LLM configured. Used deterministic template."
-      : "Used deterministic template (Ollama and Gemini unavailable).",
+    errorCode: gemini.errorCode,
+    warning: `${explainErrorMessage(gemini.errorCode)} Used deterministic pipeline template.`,
   };
 }
 
@@ -218,3 +258,5 @@ export function explainSourceLabel(source: ExplainSource): string {
       return "Deterministic template (fallback)";
   }
 }
+
+export { explainErrorMessage };

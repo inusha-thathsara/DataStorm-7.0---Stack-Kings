@@ -1,22 +1,37 @@
+import type { ExplainErrorCode } from "./explainErrors";
 import type { ExplainMeta, ExplainSource, Outlet } from "./types";
+import type { StructuredExplanation } from "./explainSchema";
+import { normalizeLlmExplanation } from "./xaiShared";
+import { parseExplainInput, repairStructuredExplanation } from "./explainSchema";
 import {
   DEFAULT_OLLAMA_BASE,
   DEFAULT_OLLAMA_MODEL,
   DEFAULT_OLLAMA_TIMEOUT_MS,
   buildOllamaChatBody,
+  buildTemplateStructured,
   buildXaiPrompt,
   isTemplateExplanation,
   parseVerifiedOllamaResponse,
   resolveOllamaNumGpu,
   type VerifiedOllamaResult,
 } from "./xaiShared";
+import { stableStringifyExplanation } from "./explainSchema";
+import {
+  formatExplainError,
+  readSessionExplanation,
+  sessionExplainKey,
+  writeSessionExplanation,
+} from "./explainCacheClient";
 
 export type ExplainResult = {
+  payload: StructuredExplanation;
   explanation: string;
   source: ExplainSource;
   meta?: ExplainMeta;
   warning?: string;
   error?: string;
+  errorCode?: ExplainErrorCode;
+  cached?: boolean;
 };
 
 function clientOllamaConfig() {
@@ -36,27 +51,29 @@ export function isClientOllamaEnabled(): boolean {
   return clientOllamaConfig().enabled;
 }
 
-function ollamaFailureMessage(err: unknown, model: string): string {
+function ollamaFailureMessage(err: unknown, model: string): { error: string; errorCode?: ExplainErrorCode } {
   if (err instanceof DOMException && err.name === "AbortError") {
-    return `Ollama timed out — increase NEXT_PUBLIC_OLLAMA_TIMEOUT_MS (${model} may need 30–120s).`;
+    return {
+      error: formatExplainError("OLLAMA_TIMEOUT"),
+      errorCode: "OLLAMA_TIMEOUT",
+    };
   }
   const msg = err instanceof Error ? err.message : String(err);
   if (/failed to fetch|networkerror|cors/i.test(msg)) {
-    return (
-      `Browser cannot reach Ollama. Start Ollama (ollama serve), pull the model (ollama pull ${model}), ` +
-      "and set CORS: OLLAMA_ORIGINS=http://localhost:3000 then restart Ollama."
-    );
+    return {
+      error: formatExplainError("OLLAMA_UNREACHABLE"),
+      errorCode: "OLLAMA_UNREACHABLE",
+    };
   }
-  return `Ollama request failed: ${msg}`;
+  return { error: `Ollama request failed: ${msg}` };
 }
 
-/**
- * Call Ollama directly from the browser so inference runs on the user's machine
- * (visible in Task Manager / ollama ps) — not via the Next.js server process.
- */
 export async function fetchBrowserOllamaExplanation(
   outlet: Outlet
-): Promise<{ result: VerifiedOllamaResult; clientDurationMs: number } | { error: string }> {
+): Promise<
+  | { result: VerifiedOllamaResult & { payload: StructuredExplanation }; clientDurationMs: number }
+  | { error: string; errorCode?: ExplainErrorCode }
+> {
   const { enabled, base, model, timeoutMs, numGpu } = clientOllamaConfig();
   if (!enabled) {
     return { error: "Client Ollama disabled (NEXT_PUBLIC_OLLAMA_ENABLED=false)." };
@@ -73,7 +90,10 @@ export async function fetchBrowserOllamaExplanation(
       cache: "no-store",
     });
     if (!tagsRes.ok) {
-      return { error: `Ollama is not reachable at ${base} (HTTP ${tagsRes.status}).` };
+      return {
+        error: formatExplainError("OLLAMA_UNREACHABLE"),
+        errorCode: "OLLAMA_UNREACHABLE",
+      };
     }
 
     const res = await fetch(`${base}/api/chat`, {
@@ -85,9 +105,9 @@ export async function fetchBrowserOllamaExplanation(
     });
 
     if (!res.ok) {
-      const errBody = await res.text().catch(() => "");
       return {
-        error: `Ollama /api/chat HTTP ${res.status}${errBody ? `: ${errBody.slice(0, 160)}` : ""}`,
+        error: formatExplainError("OLLAMA_UNREACHABLE"),
+        errorCode: "OLLAMA_UNREACHABLE",
       };
     }
 
@@ -95,54 +115,129 @@ export async function fetchBrowserOllamaExplanation(
     const verified = parseVerifiedOllamaResponse(data);
     if (!verified) {
       return {
-        error:
-          `Ollama returned no generated tokens (eval_count=0 or empty content). ` +
-          `Check think:false and that ${model} is pulled.`,
+        error: formatExplainError("OLLAMA_INVALID_JSON"),
+        errorCode: "OLLAMA_INVALID_JSON",
       };
     }
-    if (isTemplateExplanation(outlet, verified.text)) {
-      return { error: "Ollama output matched the deterministic template — not counted as LLM inference." };
+    const payload =
+      normalizeLlmExplanation(verified.text, outlet) ?? parseExplainInput(verified.text);
+    if (!payload) {
+      return {
+        error: formatExplainError("OLLAMA_INVALID_JSON"),
+        errorCode: "OLLAMA_INVALID_JSON",
+      };
+    }
+    if (isTemplateExplanation(outlet, payload)) {
+      return {
+        error: "Ollama output matched the deterministic template — not counted as LLM inference.",
+        errorCode: "OLLAMA_INVALID_JSON",
+      };
     }
 
-    return { result: verified, clientDurationMs: Date.now() - started };
+    return {
+      result: { ...verified, payload },
+      clientDurationMs: Date.now() - started,
+    };
   } catch (err) {
-    return { error: ollamaFailureMessage(err, model) };
+    return ollamaFailureMessage(err, model);
   } finally {
     clearTimeout(timer);
   }
 }
 
-async function fetchServerFallback(
-  outlet: Outlet
-): Promise<{ explanation: string; source: ExplainSource; meta?: ExplainMeta; warning?: string }> {
-  const res = await fetch("/api/explain", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ outlet, skipOllama: true }),
+type ServerExplainResponse = {
+  explanation?: string;
+  payload?: StructuredExplanation;
+  source?: ExplainSource;
+  meta?: ExplainMeta;
+  warning?: string;
+  error?: string;
+  errorCode?: ExplainErrorCode;
+  errorMessage?: string;
+  cached?: boolean;
+  generatedAt?: string;
+};
+
+async function fetchCachedExplanation(outletId: string): Promise<ExplainResult | null> {
+  const res = await fetch(`/api/explain?outletId=${encodeURIComponent(outletId)}`, {
     cache: "no-store",
   });
-  const data = await res.json();
-  if (!res.ok || !data.explanation) {
-    throw new Error(data.error || `Explain fallback failed (HTTP ${res.status})`);
-  }
+  if (res.status === 404) return null;
+  if (!res.ok) return null;
+  const data = (await res.json()) as ServerExplainResponse;
+  const payload =
+    data.payload ??
+    (typeof data.explanation === "string" ? parseExplainInput(data.explanation) : null);
+  if (!payload || !data.source) return null;
   return {
-    explanation: data.explanation,
-    source: data.source ?? "template",
+    payload,
+    explanation: stableStringifyExplanation(payload),
+    source: data.source,
     meta: data.meta,
-    warning: data.warning,
+    cached: true,
   };
 }
 
-/**
- * Browser XAI: optional local Ollama when enabled → server Gemini → template.
- * When NEXT_PUBLIC_OLLAMA_ENABLED is not "true", skips Ollama entirely (cloud deploy).
- */
-export async function resolveExplanation(outlet: Outlet): Promise<ExplainResult> {
+async function fetchServerExplain(
+  outlet: Outlet,
+  refresh = false
+): Promise<ExplainResult> {
+  const res = await fetch("/api/explain", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ outlet, skipOllama: true, refresh }),
+    cache: "no-store",
+  });
+  const data = (await res.json()) as ServerExplainResponse;
+  const payload =
+    data.payload ??
+    (typeof data.explanation === "string" ? parseExplainInput(data.explanation) : null);
+  if (!payload) {
+    throw new Error(data.errorMessage ?? data.error ?? `Explain failed (HTTP ${res.status})`);
+  }
+  return {
+    payload,
+    explanation: data.explanation ?? stableStringifyExplanation(payload),
+    source: data.source ?? "template",
+    meta: data.meta,
+    warning: data.warning,
+    errorCode: data.errorCode,
+    cached: data.cached,
+  };
+}
+
+export async function resolveExplanation(
+  outlet: Outlet,
+  options?: { exportGeneratedAt?: string | null; refresh?: boolean }
+): Promise<ExplainResult> {
+  const cacheKey = sessionExplainKey(outlet.id, options?.exportGeneratedAt ?? null);
+
+  if (!options?.refresh) {
+    const sessionHit = readSessionExplanation(cacheKey);
+    if (sessionHit) {
+      return {
+        payload: sessionHit.payload,
+        explanation: stableStringifyExplanation(sessionHit.payload),
+        source: sessionHit.source,
+        meta: sessionHit.meta,
+        cached: true,
+      };
+    }
+    const serverHit = await fetchCachedExplanation(outlet.id);
+    if (serverHit) {
+      writeSessionExplanation(cacheKey, serverHit.payload, serverHit.source, serverHit.meta);
+      return serverHit;
+    }
+  }
+
   if (isClientOllamaEnabled()) {
     const ollamaAttempt = await fetchBrowserOllamaExplanation(outlet);
     if ("result" in ollamaAttempt) {
+      const { payload } = ollamaAttempt.result;
+      writeSessionExplanation(cacheKey, payload, "ollama", ollamaAttempt.result.meta);
       return {
-        explanation: ollamaAttempt.result.text,
+        payload,
+        explanation: stableStringifyExplanation(payload),
         source: "ollama",
         meta: ollamaAttempt.result.meta,
       };
@@ -150,20 +245,21 @@ export async function resolveExplanation(outlet: Outlet): Promise<ExplainResult>
 
     const ollamaError = ollamaAttempt.error;
     try {
-      const fallback = await fetchServerFallback(outlet);
+      const fallback = await fetchServerExplain(outlet, options?.refresh);
+      writeSessionExplanation(cacheKey, fallback.payload, fallback.source, fallback.meta);
       return {
-        explanation: fallback.explanation,
-        source: fallback.source,
-        meta: fallback.meta,
+        ...fallback,
         warning:
           fallback.warning ??
           (fallback.source === "template"
-            ? `Ollama unavailable (${ollamaError}). Used deterministic template.`
+            ? `Ollama unavailable (${ollamaError}). Used deterministic pipeline template.`
             : `Ollama unavailable (${ollamaError}). Used ${fallback.source} fallback.`),
       };
     } catch (err) {
+      const template = buildTemplateStructured(outlet);
       return {
-        explanation: "",
+        payload: template,
+        explanation: stableStringifyExplanation(template),
         source: "template",
         error: err instanceof Error ? err.message : "Explain request failed",
       };
@@ -171,18 +267,22 @@ export async function resolveExplanation(outlet: Outlet): Promise<ExplainResult>
   }
 
   try {
-    const fallback = await fetchServerFallback(outlet);
-    return {
-      explanation: fallback.explanation,
-      source: fallback.source,
-      meta: fallback.meta,
-      warning: fallback.warning,
-    };
+    const result = await fetchServerExplain(outlet, options?.refresh);
+    if (result.source !== "template") {
+      writeSessionExplanation(cacheKey, result.payload, result.source, result.meta);
+    }
+    return result;
   } catch (err) {
+    const template = buildTemplateStructured(outlet);
     return {
-      explanation: "",
+      payload: template,
+      explanation: stableStringifyExplanation(template),
       source: "template",
       error: err instanceof Error ? err.message : "Explain request failed",
     };
   }
+}
+
+export function parsePayloadFromWire(explanation: string): StructuredExplanation | null {
+  return repairStructuredExplanation(explanation) ?? parseExplainInput(explanation);
 }

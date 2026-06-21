@@ -1,6 +1,5 @@
 import type { ModelDrivers, Outlet } from "@/lib/types";
 
-/** DB row shape (snake_case) */
 export type OutletRow = {
   id: string;
   predicted_liters: number;
@@ -37,6 +36,57 @@ export type OutletRow = {
   adjustment_factor: number;
   model_drivers: ModelDrivers | null;
 };
+
+/** Minimal columns for map pins — avoids loading model_drivers JSON for 20k rows. */
+export type MapOutletRow = {
+  id: string;
+  lat: number;
+  lon: number;
+  province: string;
+  trade_spend_lkr: number;
+};
+
+const MAP_OUTLET_DEFAULTS: Omit<Outlet, "id" | "lat" | "lon" | "province" | "tradeSpendLkr"> = {
+  predictedLiters: 0,
+  ownMaxVol: 0,
+  gapLiters: 0,
+  recent3mAvg: 0,
+  distributorId: "",
+  competitorDensity: 0,
+  competitorDensityZ: 0,
+  marketSaturation: "",
+  dbscanZone: -1,
+  dbscanIsCore: false,
+  clusterId: "",
+  clusterCeiling: 0,
+  kmeansCeiling: 0,
+  qrCeiling: 0,
+  baseEnsemble: 0,
+  adjustedCeiling: 0,
+  janFactor: 1,
+  seasonalityLabel: "",
+  coolerCount: 0,
+  outletSize: "",
+  outletType: "",
+  decayTransport: 0,
+  decayFood: 0,
+  decayWorship: 0,
+  decayTotal: 0,
+  predictedIncrementalLiters: 0,
+  dominantMethod: "",
+  adjustmentFactor: 1,
+};
+
+export function rowToMapOutlet(row: MapOutletRow): Outlet {
+  return {
+    ...MAP_OUTLET_DEFAULTS,
+    id: row.id,
+    lat: Number(row.lat),
+    lon: Number(row.lon),
+    province: row.province,
+    tradeSpendLkr: Number(row.trade_spend_lkr),
+  };
+}
 
 export function rowToOutlet(row: OutletRow): Outlet {
   return {

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
+import "./print.css";
 import { DataAsOf } from "@/components/DataAsOf";
 
 const inter = Inter({ subsets: ["latin"] });

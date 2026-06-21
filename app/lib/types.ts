@@ -74,6 +74,14 @@ export type OutletsData = {
 /** Which backend produced the outlet XAI narrative */
 export type ExplainSource = "ollama" | "gemini" | "template";
 
+export type CachedExplanation = {
+  outletId: string;
+  payload: import("./explainSchema").StructuredExplanation;
+  source: ExplainSource;
+  model: string | null;
+  generatedAt: string;
+};
+
 /** Proof-of-inference metadata from a verified Ollama /api/chat response */
 export type ExplainMeta = {
   model: string;

@@ -49,6 +49,19 @@ CREATE TABLE IF NOT EXISTS outlets (
 CREATE INDEX IF NOT EXISTS idx_outlets_province ON outlets (province);
 CREATE INDEX IF NOT EXISTS idx_outlets_distributor ON outlets (distributor_id);
 CREATE INDEX IF NOT EXISTS idx_outlets_id_lower ON outlets (LOWER(id));
+CREATE INDEX IF NOT EXISTS idx_outlets_gap_liters ON outlets (gap_liters DESC);
+CREATE INDEX IF NOT EXISTS idx_outlets_predicted_liters ON outlets (predicted_liters DESC);
+CREATE INDEX IF NOT EXISTS idx_outlets_trade_spend ON outlets (trade_spend_lkr DESC);
+
+CREATE TABLE IF NOT EXISTS outlet_explanations (
+  outlet_id TEXT PRIMARY KEY REFERENCES outlets(id) ON DELETE CASCADE,
+  payload JSONB NOT NULL,
+  source TEXT NOT NULL,
+  model TEXT,
+  generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_outlet_explanations_generated ON outlet_explanations (generated_at DESC);
 
 CREATE TABLE IF NOT EXISTS optimization_summary (
   metric TEXT PRIMARY KEY,

@@ -5,22 +5,31 @@ import {
   type ScopeFilter,
 } from "@/lib/auth/rbac";
 import { getSession } from "@/lib/auth/session";
-import { getDataSource, getSql, usePostgres } from "@/lib/db/client";
+import { getDataSource, getSql, isMissingRelationError, usePostgres, withDbRead } from "@/lib/db/client";
 import {
   loadJsonGeneratedAt,
   loadJsonOptimizationSummary,
   loadJsonOutlets,
   loadJsonTotalCount,
 } from "@/lib/db/jsonFallback";
-import { rowToOutlet, type OutletRow } from "@/lib/db/row";
+import { rowToMapOutlet, rowToOutlet, type MapOutletRow, type OutletRow } from "@/lib/db/row";
 import { sampleOutletsForMap } from "@/lib/map/sample";
-import type { OptimizationSummary, Outlet } from "@/lib/types";
+import { SL_BOUNDS } from "@/lib/map/bounds";
+import type { OptimizationSummary, Outlet, CachedExplanation, ExplainSource } from "@/lib/types";
+import { parseStructuredExplanation, type StructuredExplanation } from "@/lib/explainSchema";
 import type postgres from "postgres";
+
+export type OutletSortBy = "id" | "gapLiters" | "predictedLiters" | "tradeSpendLkr";
+export type SortDir = "asc" | "desc";
 
 export type OutletListParams = ScopeFilter & {
   search?: string;
   page?: number;
   pageSize?: number;
+  sortBy?: OutletSortBy;
+  sortDir?: SortDir;
+  highSaturationOnly?: boolean;
+  hasTradeSpendOnly?: boolean;
 };
 
 export type OutletListResult = {
@@ -53,6 +62,23 @@ const OUTLET_SELECT = `
   dominant_method, adjustment_factor, model_drivers
 `;
 
+const MAP_OUTLET_SELECT = `id, lat, lon, province, trade_spend_lkr`;
+const MAP_SAMPLE_CAP = 12_000;
+
+const metaCache = new Map<
+  string,
+  { at: number; value: { provinces: string[]; distributors: string[]; totalCount: number } }
+>();
+const META_TTL_MS = 60_000;
+
+function mapCoordSql(sql: ReturnType<typeof postgres>) {
+  return sql`
+    lat >= ${SL_BOUNDS.latMin} AND lat <= ${SL_BOUNDS.latMax}
+    AND lon >= ${SL_BOUNDS.lonMin} AND lon <= ${SL_BOUNDS.lonMax}
+    AND lat >= 1 AND lon >= 1
+  `;
+}
+
 export type OutletAccessResult =
   | { kind: "found"; outlet: Outlet }
   | { kind: "not_found" }
@@ -62,17 +88,60 @@ async function resolveSession(session?: AppSession): Promise<AppSession> {
   return session ?? (await getSession());
 }
 
-function filterJsonOutlets(outlets: Outlet[], params: OutletListParams, session: AppSession): Outlet[] {
+function filterJsonOutlets(
+  outlets: Outlet[],
+  params: OutletListParams,
+  session: AppSession,
+  options?: { skipSort?: boolean }
+): Outlet[] {
   const scope = applyScopeFilter(session, params);
   const search = params.search?.toLowerCase() ?? "";
 
-  return outlets.filter((o) => {
+  let filtered = outlets.filter((o) => {
     if (scope.province && o.province !== scope.province) return false;
     if (scope.distributorId && o.distributorId !== scope.distributorId) return false;
     if (scope.westernOnly && o.province !== "Western") return false;
     if (search && !o.id.toLowerCase().includes(search)) return false;
+    if (params.highSaturationOnly && o.marketSaturation !== "high") return false;
+    if (params.hasTradeSpendOnly && o.tradeSpendLkr <= 0) return false;
     return true;
   });
+
+  if (!options?.skipSort) {
+    filtered = sortOutlets(filtered, params.sortBy ?? "id", params.sortDir ?? "asc");
+  }
+  return filtered;
+}
+
+const SORT_COLUMNS: Record<OutletSortBy, keyof Outlet | "id"> = {
+  id: "id",
+  gapLiters: "gapLiters",
+  predictedLiters: "predictedLiters",
+  tradeSpendLkr: "tradeSpendLkr",
+};
+
+function sortOutlets(outlets: Outlet[], sortBy: OutletSortBy, sortDir: SortDir): Outlet[] {
+  const key = SORT_COLUMNS[sortBy] ?? "id";
+  const dir = sortDir === "desc" ? -1 : 1;
+  return [...outlets].sort((a, b) => {
+    const av = a[key as keyof Outlet];
+    const bv = b[key as keyof Outlet];
+    if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+    return String(av).localeCompare(String(bv)) * dir;
+  });
+}
+
+function pgSortColumn(sortBy: OutletSortBy): string {
+  switch (sortBy) {
+    case "gapLiters":
+      return "gap_liters";
+    case "predictedLiters":
+      return "predicted_liters";
+    case "tradeSpendLkr":
+      return "trade_spend_lkr";
+    default:
+      return "id";
+  }
 }
 
 function resolveFilters(params: OutletListParams, session: AppSession) {
@@ -82,6 +151,8 @@ function resolveFilters(params: OutletListParams, session: AppSession) {
     distributorId: scope.distributorId ?? null,
     westernOnly: Boolean(scope.westernOnly),
     search: params.search?.trim() ? `%${params.search.trim().toLowerCase()}%` : null,
+    highSaturationOnly: Boolean(params.highSaturationOnly),
+    hasTradeSpendOnly: Boolean(params.hasTradeSpendOnly),
   };
 }
 function outletFilterSql(
@@ -93,49 +164,58 @@ function outletFilterSql(
     AND (${f.distributorId}::text IS NULL OR distributor_id = ${f.distributorId})
     AND (NOT ${f.westernOnly} OR province = 'Western')
     AND (${f.search}::text IS NULL OR LOWER(id) LIKE ${f.search})
+    AND (NOT ${f.highSaturationOnly} OR market_saturation = 'high')
+    AND (NOT ${f.hasTradeSpendOnly} OR trade_spend_lkr > 0)
   `;
 }
 
 export async function getGeneratedAt(): Promise<string | null> {
-  if (!usePostgres()) return loadJsonGeneratedAt();
-
-  const sql = getSql();
-  const rows = await sql`
-    SELECT generated_at FROM export_runs ORDER BY generated_at DESC LIMIT 1
-  `;
-  const row = rows[0] as { generated_at?: Date | string } | undefined;
-  if (!row?.generated_at) return null;
-  return row.generated_at instanceof Date
-    ? row.generated_at.toISOString()
-    : String(row.generated_at);
+  const { value } = await withDbRead(
+    "generatedAt",
+    async () => {
+      const sql = getSql();
+      const rows = await sql`
+        SELECT generated_at FROM export_runs ORDER BY generated_at DESC LIMIT 1
+      `;
+      const row = rows[0] as { generated_at?: Date | string } | undefined;
+      if (!row?.generated_at) return null;
+      return row.generated_at instanceof Date
+        ? row.generated_at.toISOString()
+        : String(row.generated_at);
+    },
+    () => loadJsonGeneratedAt()
+  );
+  return value;
 }
 
-export async function listOutlets(
+async function listOutletsJson(
   params: OutletListParams,
-  session?: AppSession
-): Promise<OutletListResult> {
-  const activeSession = await resolveSession(session);
-  const page = Math.max(0, params.page ?? 0);
-  const pageSize = Math.min(200, Math.max(1, params.pageSize ?? 50));
-  const generatedAt = await getGeneratedAt();
-  const dataSource = getDataSource();
+  activeSession: AppSession,
+  page: number,
+  pageSize: number
+): Promise<Omit<OutletListResult, "dataSource" | "generatedAt">> {
+  const all = await loadJsonOutlets();
+  const filtered = filterJsonOutlets(all, params, activeSession);
+  const slice = filtered.slice(page * pageSize, (page + 1) * pageSize);
+  return {
+    outlets: slice,
+    total: filtered.length,
+    page,
+    pageSize,
+  };
+}
 
-  if (!usePostgres()) {
-    const all = await loadJsonOutlets();
-    const filtered = filterJsonOutlets(all, params, activeSession);
-    const slice = filtered.slice(page * pageSize, (page + 1) * pageSize);
-    return {
-      outlets: slice,
-      total: filtered.length,
-      page,
-      pageSize,
-      dataSource,
-      generatedAt,
-    };
-  }
-
+async function listOutletsPg(
+  params: OutletListParams,
+  activeSession: AppSession,
+  page: number,
+  pageSize: number
+): Promise<Omit<OutletListResult, "dataSource" | "generatedAt">> {
   const sql = getSql();
   const f = resolveFilters(params, activeSession);
+  const sortBy = params.sortBy ?? "id";
+  const sortDir = params.sortDir === "desc" ? "DESC" : "ASC";
+  const orderCol = pgSortColumn(sortBy);
   const countRows = await sql`
     SELECT COUNT(*)::int AS count FROM outlets WHERE ${outletFilterSql(sql, f)}
   `;
@@ -145,7 +225,7 @@ export async function listOutlets(
   const rows = (await sql`
     SELECT ${sql.unsafe(OUTLET_SELECT)} FROM outlets
     WHERE ${outletFilterSql(sql, f)}
-    ORDER BY id
+    ORDER BY ${sql.unsafe(orderCol)} ${sql.unsafe(sortDir)}
     LIMIT ${pageSize} OFFSET ${offset}
   `) as OutletRow[];
 
@@ -154,9 +234,25 @@ export async function listOutlets(
     total,
     page,
     pageSize,
-    dataSource,
-    generatedAt,
   };
+}
+
+export async function listOutlets(
+  params: OutletListParams,
+  session?: AppSession
+): Promise<OutletListResult> {
+  const activeSession = await resolveSession(session);
+  const page = Math.max(0, params.page ?? 0);
+  const pageSize = Math.min(200, Math.max(1, params.pageSize ?? 50));
+  const [generatedAt, result] = await Promise.all([
+    getGeneratedAt(),
+    withDbRead(
+      "listOutlets",
+      () => listOutletsPg(params, activeSession, page, pageSize),
+      () => listOutletsJson(params, activeSession, page, pageSize)
+    ),
+  ]);
+  return { ...result.value, dataSource: result.dataSource, generatedAt };
 }
 
 export async function getOutletById(
@@ -191,6 +287,56 @@ export async function getOutletAccess(
   return { kind: "found", outlet };
 }
 
+async function listOutletsForMapJson(
+  params: OutletListParams,
+  activeSession: AppSession
+): Promise<{ outlets: Outlet[]; truncated: boolean; totalValid: number }> {
+  const all = await loadJsonOutlets();
+  const filtered = filterJsonOutlets(all, params, activeSession, { skipSort: true });
+  const { sampled, totalValid, truncated } = sampleOutletsForMap(filtered);
+  return { outlets: sampled, truncated, totalValid };
+}
+
+async function listOutletsForMapPg(
+  params: OutletListParams,
+  activeSession: AppSession
+): Promise<{ outlets: Outlet[]; truncated: boolean; totalValid: number }> {
+  const sql = getSql();
+  const f = resolveFilters(params, activeSession);
+  const coords = mapCoordSql(sql);
+
+  const countRows = await sql`
+    SELECT COUNT(*)::int AS count FROM outlets
+    WHERE ${outletFilterSql(sql, f)} AND ${coords}
+  `;
+  const totalValid = (countRows[0] as { count: number }).count;
+
+  let rows: MapOutletRow[];
+  if (totalValid <= MAP_SAMPLE_CAP) {
+    rows = (await sql`
+      SELECT ${sql.unsafe(MAP_OUTLET_SELECT)} FROM outlets
+      WHERE ${outletFilterSql(sql, f)} AND ${coords}
+      ORDER BY id
+    `) as MapOutletRow[];
+  } else {
+    const modulo = Math.max(2, Math.ceil(totalValid / MAP_SAMPLE_CAP));
+    rows = (await sql`
+      SELECT ${sql.unsafe(MAP_OUTLET_SELECT)} FROM outlets
+      WHERE ${outletFilterSql(sql, f)} AND ${coords}
+        AND (abs(hashtext(id)) % ${modulo}) = 0
+      ORDER BY id
+    `) as MapOutletRow[];
+  }
+
+  const outlets = rows.map(rowToMapOutlet);
+  const { sampled, truncated } = sampleOutletsForMap(outlets);
+  return {
+    outlets: sampled,
+    truncated: truncated || totalValid > MAP_SAMPLE_CAP,
+    totalValid,
+  };
+}
+
 export async function listOutletsForMap(
   params: OutletListParams,
   session?: AppSession
@@ -201,49 +347,32 @@ export async function listOutletsForMap(
   dataSource: "postgres" | "json";
 }> {
   const activeSession = await resolveSession(session);
-  const dataSource = getDataSource();
-
-  if (!usePostgres()) {
-    const all = await loadJsonOutlets();
-    const filtered = filterJsonOutlets(all, params, activeSession);
-    const { sampled, totalValid, truncated } = sampleOutletsForMap(filtered);
-    return { outlets: sampled, truncated, totalValid, dataSource };
-  }
-
-  const sql = getSql();
-  const f = resolveFilters(params, activeSession);
-  const rows = (await sql`
-    SELECT ${sql.unsafe(OUTLET_SELECT)} FROM outlets
-    WHERE ${outletFilterSql(sql, f)}
-    ORDER BY id
-  `) as OutletRow[];
-  const outlets = rows.map(rowToOutlet);
-  const { sampled, totalValid, truncated } = sampleOutletsForMap(outlets);
-  return { outlets: sampled, truncated, totalValid, dataSource };
+  const { value, dataSource } = await withDbRead(
+    "listOutletsForMap",
+    () => listOutletsForMapPg(params, activeSession),
+    () => listOutletsForMapJson(params, activeSession)
+  );
+  return { ...value, dataSource };
 }
 
-export async function getOutletMeta(
+async function getOutletMetaJson(
   params: ScopeFilter & { province?: string },
-  session?: AppSession
-): Promise<{
-  provinces: string[];
-  distributors: string[];
-  totalCount: number;
-}> {
-  const activeSession = await resolveSession(session);
+  activeSession: AppSession
+): Promise<{ provinces: string[]; distributors: string[]; totalCount: number }> {
+  const all = await loadJsonOutlets();
+  const filtered = filterJsonOutlets(all, { ...params }, activeSession);
+  const provinces = [...new Set(filtered.map((o) => o.province).filter(Boolean))].sort();
+  const pool = params.province
+    ? filtered.filter((o) => o.province === params.province)
+    : filtered;
+  const distributors = [...new Set(pool.map((o) => o.distributorId).filter(Boolean))].sort();
+  return { provinces, distributors, totalCount: filtered.length };
+}
 
-  if (!usePostgres()) {
-    const all = await loadJsonOutlets();
-    const filtered = filterJsonOutlets(all, { ...params }, activeSession);
-    const provinces = [...new Set(filtered.map((o) => o.province).filter(Boolean))].sort();
-    const pool = params.province
-      ? filtered.filter((o) => o.province === params.province)
-      : filtered;
-    const distributors = [...new Set(pool.map((o) => o.distributorId).filter(Boolean))].sort();
-    const scopedTotal = filtered.length;
-    return { provinces, distributors, totalCount: scopedTotal };
-  }
-
+async function getOutletMetaPg(
+  params: ScopeFilter & { province?: string },
+  activeSession: AppSession
+): Promise<{ provinces: string[]; distributors: string[]; totalCount: number }> {
   const sql = getSql();
   const scope = applyScopeFilter(activeSession, params);
   const scopedF = resolveFilters({}, activeSession);
@@ -274,18 +403,48 @@ export async function getOutletMeta(
   return { provinces, distributors, totalCount };
 }
 
-export async function getOutletStats(
-  params: OutletListParams,
+export async function getOutletMeta(
+  params: ScopeFilter & { province?: string },
   session?: AppSession
-): Promise<OutletStats> {
+): Promise<{
+  provinces: string[];
+  distributors: string[];
+  totalCount: number;
+}> {
   const activeSession = await resolveSession(session);
-
-  if (!usePostgres()) {
-    const all = await loadJsonOutlets();
-    const filtered = filterJsonOutlets(all, params, activeSession);
-    return computeStats(filtered);
+  const cacheKey = JSON.stringify({
+    province: params.province ?? "",
+    distributorId: params.distributorId ?? "",
+    westernOnly: params.westernOnly ?? false,
+    role: activeSession.role,
+  });
+  const cached = metaCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < META_TTL_MS) {
+    return cached.value;
   }
 
+  const { value } = await withDbRead(
+    "getOutletMeta",
+    () => getOutletMetaPg(params, activeSession),
+    () => getOutletMetaJson(params, activeSession)
+  );
+  metaCache.set(cacheKey, { at: Date.now(), value });
+  return value;
+}
+
+async function getOutletStatsJson(
+  params: OutletListParams,
+  activeSession: AppSession
+): Promise<OutletStats> {
+  const all = await loadJsonOutlets();
+  const filtered = filterJsonOutlets(all, params, activeSession);
+  return computeStats(filtered);
+}
+
+async function getOutletStatsPg(
+  params: OutletListParams,
+  activeSession: AppSession
+): Promise<OutletStats> {
   const sql = getSql();
   const f = resolveFilters(params, activeSession);
   const rows = await sql`
@@ -318,6 +477,19 @@ export async function getOutletStats(
   };
 }
 
+export async function getOutletStats(
+  params: OutletListParams,
+  session?: AppSession
+): Promise<OutletStats> {
+  const activeSession = await resolveSession(session);
+  const { value } = await withDbRead(
+    "getOutletStats",
+    () => getOutletStatsPg(params, activeSession),
+    () => getOutletStatsJson(params, activeSession)
+  );
+  return value;
+}
+
 function computeStats(outlets: Outlet[]): OutletStats {
   const outletCount = outlets.length;
   if (outletCount === 0) {
@@ -345,16 +517,21 @@ function computeStats(outlets: Outlet[]): OutletStats {
 }
 
 export async function getOptimizationSummary(): Promise<OptimizationSummary> {
-  if (!usePostgres()) return loadJsonOptimizationSummary();
-
-  const sql = getSql();
-  const rows = await sql`SELECT metric, value FROM optimization_summary`;
-  const summary: OptimizationSummary = {};
-  for (const row of rows) {
-    const r = row as { metric: string; value: string };
-    summary[r.metric] = r.value;
-  }
-  return summary;
+  const { value } = await withDbRead(
+    "optimizationSummary",
+    async () => {
+      const sql = getSql();
+      const rows = await sql`SELECT metric, value FROM optimization_summary`;
+      const summary: OptimizationSummary = {};
+      for (const row of rows) {
+        const r = row as { metric: string; value: string };
+        summary[r.metric] = r.value;
+      }
+      return summary;
+    },
+    () => loadJsonOptimizationSummary()
+  );
+  return value;
 }
 
 export async function checkDbHealth(): Promise<{
@@ -364,29 +541,102 @@ export async function checkDbHealth(): Promise<{
   outletCount: number | null;
   error?: string;
 }> {
-  const dataSource = getDataSource();
   try {
-    if (!usePostgres()) {
-      const count = await loadJsonTotalCount();
-      const generatedAt = await loadJsonGeneratedAt();
-      return { ok: true, dataSource, generatedAt, outletCount: count };
-    }
-    const sql = getSql();
-    const countRows = await sql`SELECT COUNT(*)::int AS count FROM outlets`;
-    const generatedAt = await getGeneratedAt();
+    const { value, dataSource } = await withDbRead(
+      "health",
+      async () => {
+        const sql = getSql();
+        const countRows = await sql`SELECT COUNT(*)::int AS count FROM outlets`;
+        const generatedAt = await getGeneratedAt();
+        return {
+          count: (countRows[0] as { count: number }).count,
+          generatedAt,
+        };
+      },
+      async () => ({
+        count: await loadJsonTotalCount(),
+        generatedAt: await loadJsonGeneratedAt(),
+      })
+    );
     return {
       ok: true,
       dataSource,
-      generatedAt,
-      outletCount: (countRows[0] as { count: number }).count,
+      generatedAt: value.generatedAt,
+      outletCount: value.count,
     };
   } catch (err) {
     return {
       ok: false,
-      dataSource,
+      dataSource: getDataSource(),
       generatedAt: null,
       outletCount: null,
       error: err instanceof Error ? err.message : "Health check failed",
     };
+  }
+}
+
+export async function getCachedExplanation(outletId: string): Promise<CachedExplanation | null> {
+  if (!usePostgres()) return null;
+  try {
+    const sql = getSql();
+    const rows = await sql`
+      SELECT outlet_id, payload, source, model, generated_at
+      FROM outlet_explanations
+      WHERE outlet_id = ${outletId}
+      LIMIT 1
+    `;
+    const row = rows[0] as {
+      outlet_id: string;
+      payload: unknown;
+      source: string;
+      model: string | null;
+      generated_at: Date | string;
+    } | undefined;
+    if (!row) return null;
+    const payload = parseStructuredExplanation(row.payload);
+    if (!payload) return null;
+    const generatedAt =
+      row.generated_at instanceof Date ? row.generated_at.toISOString() : String(row.generated_at);
+    const source = row.source as ExplainSource;
+    return {
+      outletId: row.outlet_id,
+      payload,
+      source,
+      model: row.model,
+      generatedAt,
+    };
+  } catch (err) {
+    if (isMissingRelationError(err, "outlet_explanations")) {
+      console.warn("[db] outlet_explanations missing — explain cache read skipped");
+      return null;
+    }
+    throw err;
+  }
+}
+
+export async function upsertExplanation(
+  outletId: string,
+  payload: StructuredExplanation,
+  source: ExplainSource,
+  model?: string | null
+): Promise<void> {
+  if (!usePostgres()) return;
+  try {
+    const sql = getSql();
+    await sql`
+      INSERT INTO outlet_explanations (outlet_id, payload, source, model, generated_at)
+      VALUES (${outletId}, ${sql.json(payload as never)}, ${source}, ${model ?? null}, NOW())
+      ON CONFLICT (outlet_id) DO UPDATE SET
+        payload = EXCLUDED.payload,
+        source = EXCLUDED.source,
+        model = EXCLUDED.model,
+        generated_at = NOW()
+    `;
+  } catch (err) {
+    if (isMissingRelationError(err, "outlet_explanations")) {
+      console.warn("[db] outlet_explanations missing — explain cache write skipped");
+      return;
+    }
+    throw err;
   }
 }

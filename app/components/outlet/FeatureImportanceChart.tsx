@@ -19,6 +19,7 @@ const ROW_HEIGHT = 52;
 
 type Props = {
   drivers: QrFeatureDriver[];
+  highlightFeature?: string | null;
 };
 
 function wrapLabel(label: string, maxLineLen = 22): string[] {
@@ -72,7 +73,7 @@ function YAxisTick(props: {
   );
 }
 
-export function FeatureImportanceChart({ drivers }: Props) {
+export function FeatureImportanceChart({ drivers, highlightFeature }: Props) {
   if (!drivers.length) {
     return (
       <Alert variant="info">
@@ -87,6 +88,7 @@ export function FeatureImportanceChart({ drivers }: Props) {
 
   const chartData = sorted.map((d) => ({
     label: d.label,
+    feature: d.feature,
     contribution: d.contributionLiters,
     direction: d.direction,
   }));
@@ -141,12 +143,18 @@ export function FeatureImportanceChart({ drivers }: Props) {
             }}
           />
           <Bar dataKey="contribution" radius={[0, 4, 4, 0]} maxBarSize={28}>
-            {chartData.map((entry) => (
-              <Cell
-                key={entry.label}
-                fill={entry.direction === "up" ? SUCCESS : WARNING}
-              />
-            ))}
+            {chartData.map((entry) => {
+              const isHighlighted = highlightFeature === entry.feature;
+              const base = entry.direction === "up" ? SUCCESS : WARNING;
+              return (
+                <Cell
+                  key={entry.label}
+                  fill={isHighlighted ? "#065f46" : base}
+                  stroke={isHighlighted ? "#064e3b" : undefined}
+                  strokeWidth={isHighlighted ? 2 : 0}
+                />
+              );
+            })}
           </Bar>
         </BarChart>
       </ResponsiveContainer>

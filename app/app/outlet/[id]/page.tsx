@@ -4,12 +4,19 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { ExplainPanel } from "@/components/ExplainPanel";
 import { FeatureImportanceChart } from "@/components/outlet/FeatureImportanceChart";
+import { OutletDetailSkeleton } from "@/components/outlet/OutletDetailSkeleton";
 import { PotentialVolumeChart } from "@/components/outlet/PotentialVolumeChart";
 import { Badge } from "@/components/ui/Badge";
 import { Alert } from "@/components/ui/Alert";
+import { Button } from "@/components/ui/Button";
+import { ShareActions } from "@/components/ShareActions";
+import { CompareWithButton } from "@/components/CompareWithButton";
 import { Card, CardTitle, PanelHeader, PanelHeaderTitle } from "@/components/ui/Card";
-import { MetricRow } from "@/components/ui/MetricRow";
 import { LoadingState } from "@/components/ui/Skeleton";
+import { MetricRow } from "@/components/ui/MetricRow";
+import type { ExplainErrorCode } from "@/lib/explainErrors";
+import type { ExplainMetricRef, ExplainSwotItem } from "@/lib/explainSchema";
+import { resolveSwotItemRefs, scrollToHighlight } from "@/lib/explainRefs";
 import { resolveExplanation } from "@/lib/xaiClient";
 import type { ExplainMeta, ExplainSource, Outlet } from "@/lib/types";
 import Link from "next/link";
@@ -29,10 +36,14 @@ export default function OutletPage({ params }: { params: { id: string } }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [explanation, setExplanation] = useState<string>("");
   const [explainError, setExplainError] = useState<string | null>(null);
+  const [explainErrorCode, setExplainErrorCode] = useState<ExplainErrorCode | null>(null);
   const [loading, setLoading] = useState(false);
   const [source, setSource] = useState<ExplainSource>("template");
   const [explainMeta, setExplainMeta] = useState<ExplainMeta | null>(null);
   const [explainWarning, setExplainWarning] = useState<string | null>(null);
+  const [explainCached, setExplainCached] = useState(false);
+  const [highlightMetric, setHighlightMetric] = useState<ExplainMetricRef | null>(null);
+  const [highlightFeature, setHighlightFeature] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,14 +71,41 @@ export default function OutletPage({ params }: { params: { id: string } }) {
     };
   }, [params.id]);
 
-  async function explain() {
+  useEffect(() => {
+    if (!outlet) return;
+    let cancelled = false;
+    fetch(`/api/explain?outletId=${encodeURIComponent(outlet.id)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.explanation) return;
+        setExplanation(data.explanation);
+        setSource(data.source ?? "template");
+        setExplainCached(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [outlet]);
+
+  function handleSwotRefClick(item: ExplainSwotItem) {
+    const resolved = resolveSwotItemRefs(item);
+    if (!resolved) return;
+    setHighlightMetric(resolved.highlightMetric ?? null);
+    setHighlightFeature(resolved.highlightFeature ?? null);
+    scrollToHighlight(resolved.scrollTargetId);
+  }
+
+  async function explain(refresh = false) {
     if (!outlet) return;
     setLoading(true);
     setExplainError(null);
+    setExplainErrorCode(null);
     setExplainWarning(null);
     setExplainMeta(null);
+    setExplainCached(false);
     try {
-      const result = await resolveExplanation(outlet);
+      const result = await resolveExplanation(outlet, { refresh });
       if (result.error && !result.explanation) {
         throw new Error(result.error);
       }
@@ -75,6 +113,8 @@ export default function OutletPage({ params }: { params: { id: string } }) {
       setSource(result.source);
       setExplainMeta(result.meta ?? null);
       setExplainWarning(result.warning ?? null);
+      setExplainErrorCode(result.errorCode ?? null);
+      setExplainCached(Boolean(result.cached));
     } catch (err) {
       setExplainError(err instanceof Error ? err.message : "Explain request failed");
       setExplanation("");
@@ -86,7 +126,7 @@ export default function OutletPage({ params }: { params: { id: string } }) {
   }
 
   if (dataLoading) {
-    return <LoadingState message="Loading outlet…" />;
+    return <OutletDetailSkeleton />;
   }
 
   if (loadError) {
@@ -161,6 +201,10 @@ export default function OutletPage({ params }: { params: { id: string } }) {
                 <Badge tone="default">{outlet.outletSize}</Badge>
               </div>
             </div>
+            <div className="flex flex-wrap gap-2 no-print">
+              <CompareWithButton outletId={outlet.id} />
+              <ShareActions />
+            </div>
             <div className="text-left sm:text-right">
               <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
                 Predicted Jan 2026
@@ -182,7 +226,7 @@ export default function OutletPage({ params }: { params: { id: string } }) {
       <OutletMap outlets={[outlet]} highlightId={outlet.id} showDetailLinks={false} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Card className="shadow-card">
+        <Card className="shadow-card" id="chart-potential" tabIndex={-1}>
           <PanelHeader className="mb-0 border-0 bg-transparent px-0 py-0">
             <PanelHeaderTitle className="normal-case tracking-normal text-base text-text-primary">
               Predicted potential
@@ -196,11 +240,12 @@ export default function OutletPage({ params }: { params: { id: string } }) {
               gapLiters={outlet.gapLiters}
               janFactor={outlet.janFactor}
               seasonalityLabel={outlet.seasonalityLabel}
+              highlightMetric={highlightMetric}
             />
           </div>
         </Card>
 
-        <Card className="shadow-card">
+        <Card className="shadow-card" id="section-competition" tabIndex={-1}>
           <PanelHeader className="mb-0 border-0 bg-transparent px-0 py-0">
             <PanelHeaderTitle className="normal-case tracking-normal text-base text-text-primary">
               Model traceability
@@ -229,18 +274,21 @@ export default function OutletPage({ params }: { params: { id: string } }) {
           </div>
         </Card>
 
-        <Card className="shadow-card md:col-span-2">
+        <Card className="shadow-card md:col-span-2" id="chart-features" tabIndex={-1}>
           <PanelHeader className="mb-0 border-0 bg-transparent px-0 py-0">
             <PanelHeaderTitle className="normal-case tracking-normal text-base text-text-primary">
               Feature importance (QR τ=0.90)
             </PanelHeaderTitle>
           </PanelHeader>
           <div className="mt-3">
-            <FeatureImportanceChart drivers={outlet.modelDrivers?.qrTopDrivers ?? []} />
+            <FeatureImportanceChart
+              drivers={outlet.modelDrivers?.qrTopDrivers ?? []}
+              highlightFeature={highlightFeature}
+            />
           </div>
         </Card>
 
-        <Card className="shadow-card">
+        <Card className="shadow-card" id="section-environment" tabIndex={-1}>
           <PanelHeader className="mb-0 border-0 bg-transparent px-0 py-0">
             <PanelHeaderTitle className="normal-case tracking-normal text-base text-text-primary">
               Local environment
@@ -267,7 +315,11 @@ export default function OutletPage({ params }: { params: { id: string } }) {
       </div>
 
       {outlet.tradeSpendLkr > 0 && (
-        <Card className="border-emerald-200 bg-semantic-success-bg shadow-card">
+        <Card
+          id="section-trade-spend"
+          tabIndex={-1}
+          className="border-emerald-200 bg-semantic-success-bg shadow-card"
+        >
           <CardTitle className="text-emerald-900">Western Province trade spend</CardTitle>
           <p className="mt-2 text-sm text-emerald-800">
             Allocation:{" "}
@@ -287,10 +339,14 @@ export default function OutletPage({ params }: { params: { id: string } }) {
         loading={loading}
         explanation={explanation}
         source={source}
+        outlet={outlet}
         meta={explainMeta}
         warning={explainWarning}
         error={explainError}
-        onExplain={explain}
+        errorCode={explainErrorCode}
+        cached={explainCached}
+        onExplain={() => explain(true)}
+        onRefClick={handleSwotRefClick}
       />
     </div>
   );

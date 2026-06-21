@@ -29,7 +29,11 @@ Record **only the browser** for most of the video; optional 10-second terminal c
 
 | Nice to have (if time) | |
 |------------------------|---|
-| Sort by **gap** to find high-opportunity Western outlet | Table column |
+| Sort by **gap** (default) or predicted / spend | Sort dropdown + column headers |
+| **Compare** two outlets side-by-side | Table checkboxes → Compare bar → `/compare?a=&b=` |
+| **Copy link**, **Export Markdown**, **Print / PDF** | Outlet detail toolbar + Explain panel |
+| Saved **filter presets** (local) | Filter bar preset dropdown |
+| SWOT with **click-to-highlight** chart refs | Explain panel → click SWOT bullet |
 | Second outlet (saturated vs high-gap contrast) | 15 sec only |
 | `python src/verify_all.py` → 327 PASS | Terminal, last 10 sec |
 
@@ -45,10 +49,10 @@ Record **only the browser** for most of the video; optional 10-second terminal c
 
 1. **App running:** `npm run build:clean && npm run start` in `app/` → http://localhost:3000  
 2. **`outlets.json` exists** (home loads 20,000 rows — no error banner).  
-3. **XAI:** Ollama running with `gemma4:e4b` *or* Gemini key in `.env.local` *or* rely on **Template** (always works). Rehearse Explain once.  
+3. **XAI:** Ollama running with `gemma3:1b` *or* Gemini key in `.env.local` *or* rely on **Template** (always works). Rehearse Explain once — cached explanations load instantly on revisit.  
 4. **Display:** 1920×1080, browser zoom **100%**, dark notifications off.  
-5. **Pre-sort:** Filter Province → **Western**, sort table by **Gap** descending so a strong demo outlet is on page 1.  
-6. **Note one outlet ID** (e.g. high gap, has trade spend LKR > 0) for drill-down.  
+5. **Pre-sort:** Filter Province → **Western**, confirm sort **Gap ↓** (URL reflects filters for shareable links).  
+6. **Note two outlet IDs** for compare (e.g. high gap + high saturation contrast).  
 7. **Mic test** — judges must hear you clearly.
 
 ---
@@ -79,7 +83,8 @@ Record **only the browser** for most of the video; optional 10-second terminal c
 | 1:15 | Open **Province** filter → **Western** (~9,000) | "A trade manager filters to **Western Province** — nine thousand outlets — the scope of the budget challenge." |
 | 1:30 | Optional: **Distributor** → e.g. DIST_W_01 | "They can narrow further by **distributor** for route planning." |
 | 1:45 | Scroll to **map** | "The map gives geographic context — provinces color-coded; **green pins** highlight outlets receiving trade spend under our optimizer." |
-| 2:00 | Back to table; point **Gap**, **Predicted**, **Trade spend** columns | "Users scan by **gap** — potential minus history — to prioritize visits. **Trade spend** shows the rupee recommendation per outlet." |
+| 2:00 | Back to table; click **Gap** header or use sort dropdown | "Users **sort** by gap, predicted volume, or trade spend — URL updates so managers can **share filtered views**." |
+| 2:10 | Optional: tick **Compare** on two rows → open compare page | "Reps can **compare two outlets** side-by-side — gap, spend, saturation, and mini charts in one screen." |
 
 **Line to hit judges' "how users interact":**
 
@@ -108,10 +113,11 @@ Record **only the browser** for most of the video; optional 10-second terminal c
 
 **Say:**
 
-> "Field reps can press **Explain this outlet**. We use **hybrid explainable AI**: try **local Ollama** first, then **Gemini** if configured, then a **deterministic template** — always available offline.  
+> "Field reps can press **Explain this outlet**. We use **hybrid explainable AI**: try **local Ollama** first, then **Gemini** if configured, then a **deterministic template** — always available offline. Successful explanations are **cached** in production for instant reload.  
 > **Important:** the LLM **never generates predictions** — it only narrates numbers already computed by our Bronze-to-Gold pipeline.  
-> [Read first 2 sentences of the explanation.]  
-> The badge shows the source — Ollama, Gemini, or Template — for auditability, documented in our **GenAI transparency log**."
+> The panel shows a structured **SWOT** — click a bullet to **highlight** the matching chart metric or QR driver.  
+> [Read first 2 sentences of the business summary.]  
+> Reps can **copy a share link**, **export Markdown**, or **print to PDF** for offline briefings. The badge shows the source — Ollama, Gemini, or Template — for auditability."
 
 If Explain fails: click again or say *"Template fallback ensures demos never block on API keys."*
 

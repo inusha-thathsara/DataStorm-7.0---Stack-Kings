@@ -1,0 +1,17 @@
+@media print {
+  header,
+  footer,
+  .no-print,
+  button {
+    display: none !important;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .print-area {
+    break-inside: avoid;
+  }
+}

@@ -1,24 +1,78 @@
-import type { ExplainMeta, ModelDrivers, Outlet } from "./types";
+import type { ExplainMeta, Outlet } from "./types";
 import {
-  buildSwotFromOutlet,
-  formatSwotText,
+  buildStructuredTemplateExplanation,
+  buildStructuredTemplateJson,
+  buildTemplateLegacyText,
   topQrDrivers,
 } from "./explainFormat";
+import {
+  EXPLAIN_JSON_INSTRUCTION,
+  repairStructuredExplanation,
+  stableStringifyExplanation,
+  type StructuredExplanation,
+  type StructuredSwot,
+} from "./explainSchema";
+
+function hasStructuredSwot(swot: StructuredExplanation["swot"]): boolean {
+  return (
+    swot.strengths.length +
+      swot.weaknesses.length +
+      swot.opportunities.length +
+      swot.threats.length >
+    0
+  );
+}
+
+function mergeSwotQuadrants(llm: StructuredSwot, template: StructuredSwot): StructuredSwot {
+  return {
+    strengths: llm.strengths.length ? llm.strengths : template.strengths,
+    weaknesses: llm.weaknesses.length ? llm.weaknesses : template.weaknesses,
+    opportunities: llm.opportunities.length ? llm.opportunities : template.opportunities,
+    threats: llm.threats.length ? llm.threats : template.threats,
+  };
+}
+
+/** Parse and repair LLM JSON; fill empty SWOT quadrants and summary from pipeline template. */
+export function normalizeLlmExplanation(
+  text: string,
+  outlet?: Outlet
+): StructuredExplanation | null {
+  const repaired = repairStructuredExplanation(text);
+  if (!repaired) return null;
+
+  let swot = repaired.swot;
+  let summary = repaired.summary;
+
+  if (outlet) {
+    const template = buildStructuredTemplateExplanation(outlet);
+    if (!hasStructuredSwot(swot)) {
+      swot = template.swot;
+    } else {
+      swot = mergeSwotQuadrants(swot, template.swot);
+    }
+    if (summary.length === 0) {
+      summary = template.summary;
+    }
+  }
+
+  if (!hasStructuredSwot(swot) && summary.length === 0) return null;
+
+  return { swot, summary };
+}
 
 export const DEFAULT_OLLAMA_BASE = "http://127.0.0.1:11434";
 export const DEFAULT_OLLAMA_MODEL = "gemma3:1b";
 export const DEFAULT_OLLAMA_TIMEOUT_MS = 120_000;
-/** Request max GPU layer offload (Ollama caps at VRAM). 0 = CPU-only — never use for XAI. */
 export const DEFAULT_OLLAMA_NUM_GPU = 999;
 
 export type { ExplainMeta };
 
 export type VerifiedOllamaResult = {
   text: string;
+  payload: StructuredExplanation;
   meta: ExplainMeta;
 };
 
-/** Structured payload for LLM XAI (includes explicit feature weights / drivers). */
 export function buildXaiPayload(outlet: Outlet): Record<string, unknown> {
   const md = outlet.modelDrivers;
   return {
@@ -43,31 +97,19 @@ export function buildXaiPayload(outlet: Outlet): Record<string, unknown> {
     tradeSpendLkr: outlet.tradeSpendLkr,
     predictedIncrementalLiters: outlet.predictedIncrementalLiters,
     modelDrivers: md ?? null,
-    instructions: [
-      "Respond in TWO sections with these exact headings: SWOT ANALYSIS, then BUSINESS SUMMARY.",
-      "Start immediately with the line SWOT ANALYSIS — no introduction, preamble, or meta-commentary.",
-      "Under SWOT ANALYSIS include Strengths, Weaknesses, Opportunities, Threats — each with 2–4 bullet lines starting with '-'.",
-      "Use ONLY facts from this JSON. Ground SWOT in gapLiters, modelDrivers.qrTopDrivers, competition, saturation, tradeSpendLkr, seasonality.",
-      "Under BUSINESS SUMMARY write 2 short paragraphs of outlet narrative only — no filler phrases like 'here is' or 'based on the JSON'.",
-      "Wrap the most important numbers and terms in **double asterisks** for highlighting (e.g. **914.7 L**, **high saturation**).",
-      "Do not invent numbers, metrics, or outlet attributes.",
-    ].join(" "),
+    instructions: EXPLAIN_JSON_INSTRUCTION,
   };
 }
 
 export function buildXaiPrompt(outlet: Outlet): string {
   return (
-    "Analyze this FMCG outlet and produce a SWOT analysis plus a highlighted business summary. " +
-    "Use ONLY the facts in the JSON below. Include feature importance from modelDrivers.qrTopDrivers " +
-    "(weight and contributionLiters) and competition adjustment weights. " +
-    "Do not add any introduction or preamble — begin with SWOT ANALYSIS on the first line. " +
-    "Format:\n\nSWOT ANALYSIS\nStrengths:\n- ...\nWeaknesses:\n- ...\nOpportunities:\n- ...\nThreats:\n- ...\n\n" +
-    "BUSINESS SUMMARY\n(2 paragraphs of narrative only; wrap key metrics in **double asterisks**)\n\n" +
+    "Analyze this FMCG outlet and return structured JSON for SWOT + business summary. " +
+    EXPLAIN_JSON_INSTRUCTION +
+    "\n\nOutlet data:\n" +
     JSON.stringify(buildXaiPayload(outlet), null, 2)
   );
 }
 
-/** Parse num_gpu layers from env (999 = offload as many layers as VRAM allows). */
 export function resolveOllamaNumGpu(raw: string | undefined): number {
   if (raw === undefined || raw.trim() === "") return DEFAULT_OLLAMA_NUM_GPU;
   const n = Number(raw);
@@ -85,31 +127,27 @@ export function buildOllamaChatBody(
     stream: false,
     think: false,
     keep_alive: "10m",
+    format: "json",
     messages: [
       {
         role: "system",
         content:
-          "You are a FMCG analytics assistant. Explain predictions using only provided data. " +
-          "No introduction or preamble. Start with SWOT ANALYSIS, then BUSINESS SUMMARY (2 paragraphs). " +
-          "Highlight key metrics with **double asterisks**.",
+          "You are a FMCG analytics assistant. Respond with a single JSON object matching the schema. " +
+          "Never put JSON inside summary strings. No markdown fences or preamble. Example: " +
+          '{"swot":{"strengths":[{"text":"High gap"}],"weaknesses":[{"text":"Low history"}],"opportunities":[{"text":"Seasonal uplift"}],"threats":[{"text":"Competition"}]},"summary":["One paragraph about the outlet."]}',
       },
       { role: "user", content: prompt },
     ],
     options: {
       temperature: 0.2,
-      num_predict: 1024,
-      /** Layers to place on GPU — high value forces GPU-first (Ollama trims to fit VRAM). */
+      num_predict: 1536,
       num_gpu: numGpu,
       main_gpu: 0,
     },
   };
 }
 
-/**
- * Only treat a response as real Ollama inference when the API reports generation tokens.
- * Prevents mis-labeling empty/cached/template text as Ollama output.
- */
-export function parseVerifiedOllamaResponse(data: unknown): VerifiedOllamaResult | null {
+export function parseVerifiedOllamaResponse(data: unknown): Omit<VerifiedOllamaResult, "payload"> & { payload?: StructuredExplanation } | null {
   if (!data || typeof data !== "object") return null;
   const row = data as Record<string, unknown>;
   if (row.done !== true) return null;
@@ -126,8 +164,11 @@ export function parseVerifiedOllamaResponse(data: unknown): VerifiedOllamaResult
   const model = typeof row.model === "string" ? row.model : "";
   if (!model) return null;
 
+  const payload = normalizeLlmExplanation(text, undefined) ?? undefined;
+
   return {
     text,
+    payload,
     meta: {
       model,
       evalCount,
@@ -138,64 +179,21 @@ export function parseVerifiedOllamaResponse(data: unknown): VerifiedOllamaResult
   };
 }
 
-function normalizeExplanationForCompare(text: string): string {
-  return text
-    .trim()
-    .replace(/\r\n/g, "\n")
-    .replace(/^```(?:markdown|text)?\s*\n?/i, "")
-    .replace(/\n?```\s*$/i, "")
-    .replace(/\n{3,}/g, "\n\n");
-}
-
-/** True only when text is byte-for-byte the deterministic fallback for this outlet. */
-export function isTemplateExplanation(outlet: Outlet, text: string): boolean {
-  return (
-    normalizeExplanationForCompare(text) ===
-    normalizeExplanationForCompare(buildTemplateExplanation(outlet))
-  );
+export function isTemplateExplanation(outlet: Outlet, payload: StructuredExplanation): boolean {
+  const template = buildStructuredTemplateExplanation(outlet);
+  return stableStringifyExplanation(payload) === stableStringifyExplanation(template);
 }
 
 export function buildTemplateExplanation(outlet: Outlet): string {
-  const swot = buildSwotFromOutlet(outlet);
-  const uplift =
-    outlet.ownMaxVol > 0
-      ? ((outlet.predictedLiters / outlet.ownMaxVol - 1) * 100).toFixed(1)
-      : "0";
+  return buildTemplateLegacyText(outlet);
+}
 
-  const md: ModelDrivers | undefined = outlet.modelDrivers;
-  const comp = md?.competition;
-  const qrNote = topQrDrivers(md?.qrTopDrivers, 3);
+export function buildTemplateStructured(outlet: Outlet): StructuredExplanation {
+  return buildStructuredTemplateExplanation(outlet);
+}
 
-  const para1 =
-    `Outlet **${outlet.id}** (${outlet.province}, ${outlet.distributorId}) has a predicted January 2026 potential of **${outlet.predictedLiters.toFixed(1)} L** ` +
-    `(~**${uplift}%** above its historical maximum of **${outlet.ownMaxVol.toFixed(1)} L**). ` +
-    `The **${outlet.dominantMethod}** ensemble estimates a latent gap of **${outlet.gapLiters.toFixed(1)} L** ` +
-    `(recent 3-month average: **${(outlet.recent3mAvg ?? 0).toFixed(1)} L**).`;
-
-  let para2 =
-    `Market saturation is **${outlet.marketSaturation || "unknown"}** with competitor density **${outlet.competitorDensity.toFixed(2)}**. `;
-  if (comp) {
-    para2 +=
-      `Competition adjustment: penalty ×**${comp.saturationPenalty.toFixed(3)}**, boost ×**${comp.isolationBoost.toFixed(3)}** ` +
-      `(combined ×**${comp.combinedAdjustmentFactor.toFixed(3)}**). `;
-  }
-  if (qrNote) {
-    para2 += `Top model drivers: **${qrNote}**. `;
-  }
-  if (md?.kmeansPeerSignal) {
-    para2 += `${md.kmeansPeerSignal} `;
-  }
-  if (outlet.tradeSpendLkr > 0) {
-    para2 +=
-      `Recommended Western trade spend: **LKR ${outlet.tradeSpendLkr.toLocaleString()}**` +
-      (outlet.predictedIncrementalLiters > 0
-        ? ` (modeled incremental **+${outlet.predictedIncrementalLiters.toFixed(1)} L**).`
-        : ".");
-  } else {
-    para2 += "No Western Province trade spend allocated for this outlet.";
-  }
-
-  return `${formatSwotText(swot)}\n\nBUSINESS SUMMARY\n\n${para1}\n\n${para2}`;
+export function buildTemplateJson(outlet: Outlet): string {
+  return buildStructuredTemplateJson(outlet);
 }
 
 export function formatExplainMeta(meta: ExplainMeta): string {
@@ -209,3 +207,5 @@ export function formatExplainMeta(meta: ExplainMeta): string {
   }
   return parts.join(" · ");
 }
+
+export { topQrDrivers };
