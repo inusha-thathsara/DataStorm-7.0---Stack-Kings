@@ -9,7 +9,7 @@ import { ShareActions } from "@/components/ShareActions";
 import { Badge, saturationTone } from "@/components/ui/Badge";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { Card, PanelHeader, PanelHeaderTitle } from "@/components/ui/Card";
+import { Card, PanelHeader } from "@/components/ui/Card";
 import { LoadingState, Skeleton } from "@/components/ui/Skeleton";
 import {
   compareUrl,
@@ -40,25 +40,17 @@ const FeatureImportanceChart = dynamic(
 
 function CompareColumn({
   outlet,
-  label,
   excludeId,
   onChange,
 }: {
   outlet: Outlet;
-  label: string;
   excludeId: string;
   onChange: (id: string) => void;
 }) {
   return (
     <Card className="shadow-card">
       <PanelHeader className="relative mb-0 border-b border-border-muted pb-3">
-        <PanelHeaderTitle className="normal-case tracking-normal text-base">{label}</PanelHeaderTitle>
-        <CompareOutletPicker
-          slotLabel={label}
-          value={outlet.id}
-          excludeId={excludeId}
-          onChange={onChange}
-        />
+        <CompareOutletPicker value={outlet.id} excludeId={excludeId} onChange={onChange} />
       </PanelHeader>
       <div className="space-y-4 p-4">
         <div className="grid grid-cols-2 gap-3 text-sm">
@@ -230,14 +222,12 @@ export default function ComparePageClient() {
           <h1 className="mt-2 text-display-sm text-text-primary">Compare outlets</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm no-print">
             <CompareOutletPicker
-              slotLabel="Outlet A"
               value={outletA.id}
               excludeId={outletB.id}
               onChange={(id) => changeSlot("a", id)}
             />
             <span className="text-text-muted">vs</span>
             <CompareOutletPicker
-              slotLabel="Outlet B"
               value={outletB.id}
               excludeId={outletA.id}
               onChange={(id) => changeSlot("b", id)}
@@ -255,13 +245,11 @@ export default function ComparePageClient() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <CompareColumn
           outlet={outletA}
-          label="Outlet A"
           excludeId={outletB.id}
           onChange={(id) => changeSlot("a", id)}
         />
         <CompareColumn
           outlet={outletB}
-          label="Outlet B"
           excludeId={outletA.id}
           onChange={(id) => changeSlot("b", id)}
         />

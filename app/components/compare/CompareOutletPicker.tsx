@@ -8,14 +8,13 @@ import { cn } from "@/lib/utils";
 import type { Outlet } from "@/lib/types";
 
 type Props = {
-  slotLabel: string;
   value: string;
   excludeId?: string;
   onChange: (id: string) => void;
   className?: string;
 };
 
-export function CompareOutletPicker({ slotLabel, value, excludeId, onChange, className }: Props) {
+export function CompareOutletPicker({ value, excludeId, onChange, className }: Props) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -73,7 +72,7 @@ export function CompareOutletPicker({ slotLabel, value, excludeId, onChange, cla
   return (
     <div ref={rootRef} className={cn("relative", className)}>
       <FieldLabel htmlFor={`${listId}-trigger`} className="sr-only">
-        Change {slotLabel}
+        Change outlet
       </FieldLabel>
       <div className="flex flex-wrap items-center gap-2">
         <button
