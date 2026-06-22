@@ -29,8 +29,8 @@ Record **only the browser** for most of the video; optional 10-second terminal c
 
 | Nice to have (if time) | |
 |------------------------|---|
-| Sort by **gap** (default) or predicted / spend | Sort dropdown + column headers |
-| **Compare** two outlets side-by-side | Table checkboxes → Compare bar → `/compare?a=&b=` |
+| Sort by **gap**, predicted, or spend (default table sort: **outlet ID asc**) | Sort dropdown + column headers |
+| **Compare** two outlets side-by-side | Table checkboxes → Compare bar → `/compare?a=&b=`; swap via ID picker |
 | **Copy link**, **Export Markdown**, **Print / PDF** | Outlet detail toolbar + Explain panel |
 | Saved **filter presets** (local) | Filter bar preset dropdown |
 | SWOT with **click-to-highlight** chart refs | Explain panel → click SWOT bullet |
@@ -51,7 +51,7 @@ Record **only the browser** for most of the video; optional 10-second terminal c
 2. **`outlets.json` exists** (home loads 20,000 rows — no error banner).  
 3. **XAI:** Ollama running with `gemma3:1b` *or* Gemini key in `.env.local` *or* rely on **Template** (always works). Rehearse Explain once — cached explanations load instantly on revisit.  
 4. **Display:** 1920×1080, browser zoom **100%**, dark notifications off.  
-5. **Pre-sort:** Filter Province → **Western**, confirm sort **Gap ↓** (URL reflects filters for shareable links).  
+5. **Pre-sort:** Filter Province → **Western**; then sort **Gap ↓** for the demo (default browse sort is outlet ID ascending).  
 6. **Note two outlet IDs** for compare (e.g. high gap + high saturation contrast).  
 7. **Mic test** — judges must hear you clearly.
 
@@ -83,8 +83,8 @@ Record **only the browser** for most of the video; optional 10-second terminal c
 | 1:15 | Open **Province** filter → **Western** (~9,000) | "A trade manager filters to **Western Province** — nine thousand outlets — the scope of the budget challenge." |
 | 1:30 | Optional: **Distributor** → e.g. DIST_W_01 | "They can narrow further by **distributor** for route planning." |
 | 1:45 | Scroll to **map** | "The map gives geographic context — provinces color-coded; **green pins** highlight outlets receiving trade spend under our optimizer." |
-| 2:00 | Back to table; click **Gap** header or use sort dropdown | "Users **sort** by gap, predicted volume, or trade spend — URL updates so managers can **share filtered views**." |
-| 2:10 | Optional: tick **Compare** on two rows → open compare page | "Reps can **compare two outlets** side-by-side — gap, spend, saturation, and mini charts in one screen." |
+| 2:00 | Back to table; sort by **Gap** descending | "Users **sort** by gap, predicted volume, or trade spend — URL updates so managers can **share filtered views**." |
+| 2:10 | Optional: tick **Compare** on two rows → open compare page | "Reps **compare two outlets** side-by-side and can **swap either ID** from a searchable picker." |
 
 **Line to hit judges' "how users interact":**
 

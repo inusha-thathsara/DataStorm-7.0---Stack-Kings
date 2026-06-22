@@ -144,10 +144,14 @@ npm run start
 Open **http://localhost:3000**
 
 - **Browse** all 20,000 outlet predictions (paginated table + map)
-- **Filter** by province and/or distributor
-- **Drill down** into an outlet for ceilings, feature drivers, and “Explain this outlet” (Ollama → Gemini → template)
+- **Filter** by province, distributor, Western scope, saturation, and trade spend; **sort** by outlet ID, gap, predicted volume, or spend (URL-synced; shareable links)
+- **Compare** two outlets side-by-side (`/compare?a=&b=`) with searchable outlet pickers and volume/driver charts
+- **Drill down** into an outlet for ceilings, feature drivers, SWOT explainability, and export/share (copy link, Markdown, print/PDF)
+- **Hybrid XAI:** structured SWOT + business summary (Ollama → Gemini → template); optional Neon cache for production
 
-See [`app/README.md`](app/README.md) for XAI configuration and troubleshooting.
+**Data plane:** With `DATABASE_URL` (Neon Postgres), the app serves outlets via `/api/outlets/*`. Without it, the app falls back to `public/data/outlets.json` (generate via `phase6_export_app_data.py`). Production at https://stackkings.inusha.me uses Postgres.
+
+See [`app/README.md`](app/README.md) for XAI configuration, compare workflow, and troubleshooting.
 
 **Development:** `npm run dev:clean` — do not mix `dev` and `start` on the same `.next` cache.
 
@@ -164,14 +168,14 @@ Some outputs are **required to run the project locally** but are **not committed
 | `gold/features/poi_normalized.csv` | large | POI feature rebuild | `python src/phase3_gold_features.py` (after POI acquire/synthetic) |
 | Large transaction CSVs under `bronze/` / `silver/` | large | Full transaction re-ingest | `python src/run_round2_pipeline.py --full` |
 
-**Web app (`outlets.json`):** The UI fetches `/data/outlets.json` at startup. Without it, the home page shows an error. Smaller bundles in `app/public/data/` (`export_manifest.json`, `western_budget.json`, `optimization_summary.json`) *are* in the repo, but the full outlet export is not — regenerate after clone or whenever predictions change:
+**Web app (`outlets.json`):** For **local development without Postgres**, the UI loads outlet rows from `/data/outlets.json` (or API routes that read the same export). Without it, the home page shows an error. Smaller bundles in `app/public/data/` (`export_manifest.json`, `western_budget.json`, `optimization_summary.json`) *are* in the repo, but the full outlet export is not — regenerate after clone or whenever predictions change:
 
 ```bash
 # From project root (after phase4_predict + phase4_optimize have run):
 python src/phase6_export_app_data.py
 ```
 
-Then start the app ([Run the web app](#run-the-web-app)). A fresh clone should run [Option A](#option-a--standard-run-recommended-after-clone) once; that runs phase6 automatically.
+**Production (Vercel):** Set `DATABASE_URL` to Neon Postgres (see `app/lib/db/schema.sql` for tables including `outlet_explanations` explain cache). The home page uses paginated `/api/outlets` and a lightweight map sample — not a 40 MB client download.
 
 **Final submission files (upload to Google Form):**
 - `submissions/StackKings_predictions.csv` — latent potential (20,000 outlets)
@@ -299,7 +303,7 @@ outlets from purchasing up to true demand.
 2. **Competitive catchment density:** outlet-to-outlet spatial index, DBSCAN zones, saturation labels
 3. **Ensemble prediction:** `max(K-Means ceiling, QR τ=0.90)` with competition adjustment
 4. **LKR 5M optimization:** diminishing-returns LP for Western Province trade spend
-5. **Hybrid XAI:** Ollama → Gemini → template in web app (Tailwind UI in `app/`)
+5. **Hybrid XAI:** Structured SWOT + business summary (Ollama → Gemini → template) in web app (Tailwind UI in `app/`)
 
 ### Key Results (Round 2)
 | Metric | Value |

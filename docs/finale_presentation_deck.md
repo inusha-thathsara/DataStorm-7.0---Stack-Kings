@@ -242,11 +242,11 @@ Piecewise segments: **0 → 500 → 2,000 → 10,000 → 50,000 LKR** · maximiz
 ┌─────────────────────────────────────────────────────────────┐
 │  APPLICATION LAYER                                           │
 │  Next.js Outlet Intelligence App (stackkings.inusha.me)       │
-│  outlets.json │ Filter/Map/Drill-down │ Explain API (XAI)    │
+│  Neon Postgres API │ Filter/Sort/Compare │ Explain + cache   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Deployment:** Vercel (HTTPS) · Gemini Explain (cloud) · Ollama (local demo) · Template fallback (offline)  
+**Deployment:** Vercel (HTTPS) · Neon Postgres · Gemini Explain (cloud) · Ollama (local demo) · Template fallback (offline)  
 **Governance:** `genai_transparency_log.md` · 327 automated checks · full git reproducibility
 
 ---
@@ -261,15 +261,16 @@ Piecewise segments: **0 → 500 → 2,000 → 10,000 → 50,000 LKR** · maximiz
 |---------|-------------|--------|
 | **Optimization summary** | Open home | LKR 5M, incremental L, ROI, lift % |
 | **Browse** | Scroll table | 20,000 outlets — predicted, gap, trade spend |
-| **Filter** | Province → Western | ~9,000 budget-scope outlets |
-| **Route planning** | Filter by distributor | DIST_W_01 / W_02 / W_03 |
+| **Filter & sort** | Province, distributor, presets; sort gap/ID/spend | URL-synced shareable views |
+| **Compare** | Select two outlets → Compare | Side-by-side metrics + charts; swap via ID picker |
 | **Map** | Scroll map section | Geographic spend highlights |
 | **Drill-down** | Click outlet ID | Ceilings, competition, POI decay, spend |
-| **Explain** | One click | Gemini/Ollama/Template narrative + source badge |
+| **Explain** | One click | Structured SWOT + summary; Ollama/Gemini/Template badge |
+| **Share** | Copy link / Markdown / Print | Field briefings and audit trail |
 
 **5-minute demo follows this slide.**
 
-*Screenshots: home table · Western filter · outlet detail · Explain panel*
+*Screenshots: home table · Western filter · compare page · outlet detail · Explain SWOT panel*
 
 ---
 
@@ -281,8 +282,8 @@ Piecewise segments: **0 → 500 → 2,000 → 10,000 → 50,000 LKR** · maximiz
 | **Data** | Live ERP / distributor feed · replace synthetic POI with full OSM re-scrape |
 | **Model** | β grid-search on holdout · outlet-level response curves from A/B promo history |
 | **Optimizer** | Multi-period budget · provincial expansion beyond Western |
-| **App** | Paginated API instead of 40 MB JSON · role-based auth · offline PWA |
-| **XAI** | Distributor-specific prompt templates · Sinhala/Tamil explanations |
+| **App** | Role-based auth · offline PWA · Sinhala/Tamil Explain |
+| **XAI** | Distributor-specific prompt templates |
 | **MLOps** | Scheduled pipeline on cloud · drift monitoring on gap distributions |
 
 **Ethical guardrails:** LLM explains only pre-computed numbers · quarantine audit trail · disclosed GenAI development log

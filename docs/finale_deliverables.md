@@ -59,8 +59,8 @@
 | PDF asks for | Stack Kings delivers |
 |--------------|-------------------|
 | Streamlit application | **Outlet Intelligence Web App** (Next.js 14) — production-deployed |
-| Core functionalities | Browse 20k outlets, filter, map, drill-down, Explain (XAI) |
-| User workflow | Trade manager → filter Western → drill-down → Explain |
+| Core functionalities | Browse 20k outlets, sort/filter/presets, map, compare two outlets, drill-down, structured SWOT Explain, export/share |
+| User workflow | Trade manager → filter Western → sort by gap → drill-down or compare → Explain |
 | Key outputs | Predictions CSV, budget CSV, optimization banner, per-outlet trade spend |
 
 **Demo URL:** https://stackkings.inusha.me  
@@ -87,7 +87,7 @@
 | **Technical excellence** | Medallion pipeline, K-Means + QR ensemble, piecewise LP, 327 automated QA checks |
 | **Innovation** | Right-censoring framing, exponential POI decay, hybrid XAI (LLM explains, never predicts) |
 | **Business impact** | ~1.00M incremental L, ~201 L/LKR 1k, +253% vs naive baseline |
-| **Prototype quality** | Live HTTPS deploy, 20k-outlet client-side app, Gemini Explain on Vercel |
+| **Prototype quality** | Live HTTPS deploy, paginated Postgres API, structured SWOT XAI with Neon cache, compare + export |
 | **Presentation** | 3-member pitch script, rehearsed 5-min demo, numbers cheat sheet |
 
 ---
@@ -99,13 +99,16 @@
 | 0:00 | Open **stackkings.inusha.me** — home | "Live Outlet Intelligence — 20,000 scored outlets." |
 | 0:30 | Point at **optimization banner** | "LKR 5M deployed, ~1M incremental liters, +253% lift vs naive split." |
 | 1:00 | **Filter → Western Province** | "~9,000 outlets — our budget scope." |
-| 1:30 | Sort by **Gap** · click high-gap outlet | "Rep prioritizes uncaptured volume, not just size." |
+| 1:20 | Sort by **Gap** descending (not the default ID sort) | "Rep prioritizes uncaptured volume, not just size." |
+| 1:30 | Optional: tick **Compare** on two rows → `/compare` | "Side-by-side gap, spend, and charts; swap outlets via ID picker." |
+| 2:00 | Click high-gap outlet | Open detail page. |
 | 2:30 | Detail page — ceilings, competition, POI decay | "Full traceability — not a black box." |
-| 3:30 | **Explain this outlet** | "Hybrid XAI narrates pipeline numbers; LLM never generates predictions." |
+| 3:30 | **Explain this outlet** — SWOT + summary | "Hybrid XAI narrates pipeline numbers; LLM never generates predictions." |
+| 4:15 | **Copy link** or **Print / PDF** | "Field-ready share and offline briefings." |
 | 4:30 | Show **trade spend LKR** on Western outlet | "Every rupee from the piecewise LP optimizer." |
 | 5:00 | Close on home or thank you | "Stack Kings — from latent demand to field-ready decisions." |
 
-**Pre-load:** Western filter, gap sort, one outlet ID memorized, Wi‑Fi / phone hotspot backup.
+**Pre-load:** Western filter, **gap sort** (change from default ID sort), one outlet ID memorized, Wi‑Fi / phone hotspot backup.
 
 ---
 

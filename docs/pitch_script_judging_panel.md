@@ -247,6 +247,10 @@ Assign roles by strength — suggested layout below. Replace **[Name 1/2/3]** wi
 
 > They can narrow by **distributor** for route planning.
 
+*[Optional: sort Gap ↓, select two outlets → Compare]*
+
+> Reps can **compare two outlets** side-by-side and swap either ID from a searchable picker.
+
 *[Scroll to map if time]*
 
 > The map adds geographic context — **green highlights** show outlets receiving optimized trade spend.
@@ -264,6 +268,8 @@ Assign roles by strength — suggested layout below. Replace **[Name 1/2/3]** wi
 *[Click "Explain this outlet"]*
 
 > Field reps press **Explain this outlet**. We use **hybrid explainable AI**: on the cloud deployment, **Gemini** narrates the numbers; locally, **Ollama** first; always a **deterministic template fallback** if APIs are unavailable.
+
+> The panel returns a structured **SWOT** plus business summary — click a bullet to highlight the matching chart metric. Reps can **copy a share link**, **export Markdown**, or **print to PDF**.
 
 > **Critical for judges:** the LLM **never generates predictions**. It only explains values already computed by our Python pipeline. The badge shows the source — Gemini, Ollama, or Template — documented in our **GenAI transparency log**.
 
@@ -320,8 +326,8 @@ Assign roles by strength — suggested layout below. Replace **[Name 1/2/3]** wi
 ## Demo rehearsal checklist (day before)
 
 - [ ] Open **stackkings.inusha.me** on venue Wi‑Fi / hotspot backup
-- [ ] Pre-filter **Western**, sort by **Gap** descending
-- [ ] Note one **outlet ID** (high gap, trade spend > 0)
+- [ ] Pre-filter **Western**, then sort by **Gap** descending (default browse sort is outlet ID)
+- [ ] Note one **outlet ID** (high gap, trade spend > 0) and a second for **Compare**
 - [ ] Click **Explain** once — confirm Gemini returns full paragraphs
 - [ ] Browser zoom 100%, notifications off, full screen
 - [ ] PDF deck + technical paper ready if judges ask
@@ -336,7 +342,7 @@ Assign roles by strength — suggested layout below. Replace **[Name 1/2/3]** wi
 | *Why max of K-Means and QR?* | Peers capture local behavior; QR captures feature tail — ensemble is conservative but ambitious |
 | *Why piecewise LP?* | Diminishing returns on spend; maximizes incremental liters, not rank order |
 | *Did AI generate predictions?* | No. AI assisted code and explanations; predictions come from deterministic pipeline |
-| *Offline / low connectivity?* | App loads static JSON; Explain falls back to template without API |
+| *Offline / low connectivity?* | Production uses Neon Postgres API; Explain falls back to template without LLM APIs |
 | *Can we reproduce?* | Clone monorepo, `python src/run_round2_pipeline.py`, `cd app && npm run build && npm start` |
 
 ---

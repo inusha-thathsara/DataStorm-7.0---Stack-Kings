@@ -86,37 +86,33 @@ The human user issued **natural language task directives** (e.g., "proceed to ph
 
 ## XAI Module (Round 2 — In-App Explainability)
 
-**Important:** Generative AI does **not** compute `Maximum_Monthly_Liters` or trade spend. The pipeline writes all numbers; the LLM (or template) only narrates the exported `Outlet` JSON.
+**Important:** Generative AI does **not** compute `Maximum_Monthly_Liters` or trade spend. The pipeline writes all numbers; the LLM (or template) only narrates the exported `Outlet` JSON into a **structured explanation** (SWOT quadrants + business summary).
 
-### Exact prompts (`app/lib/xai.ts`)
+### Output schema (`app/lib/explainSchema.ts`)
 
-**Ollama system message:**
-```
-You are a FMCG analytics assistant. Explain predictions using only provided data.
-Write exactly 3 short paragraphs in plain business language.
-```
+| Field | Content |
+|-------|---------|
+| `swot.strengths` / `weaknesses` / `opportunities` / `threats` | Bullet lists with optional `ref` keys linking to chart metrics or QR drivers |
+| `summary` | Plain-language business paragraph(s) |
+| Repair path | `repairStructuredExplanation()` unwraps double-encoded or nested JSON from small local models |
 
-**User message (Ollama + Gemini — function `buildXaiPrompt`):**
-```
-Explain this FMCG outlet prediction in 3 short business paragraphs.
-Use ONLY the facts in the JSON below. Do not invent numbers, metrics, or outlet attributes.
+Empty or malformed LLM quadrants are merged from `buildStructuredTemplateExplanation()`. Unit tests: `app/lib/explainSchema.test.ts` (`npm test` in `app/`).
 
-<pretty-printed JSON of Outlet object>
-```
-
-The JSON includes: `predictedLiters`, `ownMaxVol`, `gapLiters`, `recent3mAvg`, `province`, `distributorId`, `competitorDensity`, `competitorDensityZ`, `marketSaturation`, `dbscanZone`, `dbscanIsCore`, `clusterId`, `clusterCeiling`, `kmeansCeiling`, `qrCeiling`, `baseEnsemble`, `adjustedCeiling`, `janFactor`, `seasonalityLabel`, `coolerCount`, `outletSize`, `outletType`, `lat`, `lon`, `decayTransport`, `decayFood`, `decayWorship`, `decayTotal`, `tradeSpendLkr`, `predictedIncrementalLiters`, `dominantMethod`, `adjustmentFactor`.
-
-**Ollama request settings:** `think: false`, `temperature: 0.2`, `num_predict: 512`, default model `gemma4:e4b`, timeout 120s (`OLLAMA_TIMEOUT_MS`).
-
-**Gemini request settings:** `gemini-2.5-flash` (override via `GEMINI_MODEL`), `temperature: 0.2`, `maxOutputTokens: 300`.
-
-### Hybrid resolution order (`POST /api/explain`)
+### Resolution order
 
 | Priority | Path | Condition |
 |----------|------|-----------|
-| 1 | Ollama (local) | `OLLAMA_ENABLED=true` or `OLLAMA_BASE_URL` set; Ollama 0.20+ with model pulled |
-| 2 | Gemini (cloud) | Ollama fails or disabled; valid `GEMINI_API_KEY` |
-| 3 | Template | Always — `buildTemplateExplanation()` rule-based drivers |
+| 1 | Ollama (browser) | `NEXT_PUBLIC_OLLAMA_ENABLED=true`; model e.g. `gemma3:1b` |
+| 2 | Gemini (server `/api/explain`) | Ollama skipped or fails; `GEMINI_API_KEY` set |
+| 3 | Template | Always — deterministic structured SWOT + summary |
+
+**Production cache:** When `DATABASE_URL` (Neon) is set, explanations are stored in `outlet_explanations` for instant reload.
+
+### Prompting (summary)
+
+LLMs are asked for **JSON only** matching the structured schema (SWOT + summary), not free-form paragraphs. Ollama uses `format: "json"` where supported; Gemini uses JSON schema response mode. See `app/lib/xaiShared.ts`, `app/lib/xaiClient.ts`, and `app/lib/xai.ts` for full prompt text.
+
+**Default models:** `gemma3:1b` (Ollama), `gemini-2.5-flash` (Gemini). Ollama: `think: false`, `temperature: 0.2`, `num_predict` up to ~1536 for SWOT completeness.
 
 **Template logic (deterministic drivers):** uplift % vs own max; drivers up (gap, decay transport/food, coolers, seasonality); drivers down (saturation, competition penalty, no cooler); Western spend + incremental liters when present.
 
@@ -138,6 +134,7 @@ Coefficients saved when running `phase4_quantile.py` → `metadata/qr_model.json
 | Layer | Script / artifact | Result |
 |-------|-------------------|--------|
 | Automated CI | `python src/validate_xai_samples.py` | **20/20** template — numbers + QR weights + competition terms |
+| Unit tests | `cd app && npm test` | `explainSchema` repair/normalize |
 | Live LLM (optional) | `python src/validate_xai_llm.py` | Spot-checks Ollama/Gemini; **skips** if unreachable (use `--strict` to fail) |
 | Export contract | `app/public/data/export_manifest.json` | Schema v2 includes `modelDrivers` |
 | Master audit | `audit_all.py` | QR model file, driver fields, XAI routes |
@@ -146,9 +143,10 @@ Coefficients saved when running `phase4_quantile.py` → `metadata/qr_model.json
 
 1. Confirmed template paragraphs never invent metrics absent from JSON.
 2. Spot-checked Western outlets with high `tradeSpendLkr` — narrative matched optimizer output.
-3. Verified `resolveHybridExplanation` order: Ollama before Gemini in source.
-4. Documented `think: false` for Gemma 4 on Ollama (empty content bug without it).
+3. Verified browser Ollama → server Gemini → template order in `xaiClient.ts` / explain API route.
+4. Documented `think: false` for Gemma on Ollama (empty content without it).
 5. Approved template-only demo path for judges without API keys.
+6. SWOT `ref` cross-links validated in UI (`ExplainContent.tsx` + `explainRefs.ts`).
 
 ---
 
